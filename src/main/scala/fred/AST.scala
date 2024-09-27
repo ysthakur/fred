@@ -13,9 +13,12 @@ case class ParsedFile(typeDefs: List[TypeDef], fns: List[FnDef])
 case class Block(stmts: List[Stmt], span: Span)
 
 enum Stmt {
-  case ExprStmt(expr: Expr)
-  case If(cond: Expr, thenBody: Block, elseBody: Block)
-  case Print(expr: Expr)
+  case VarDef(name: Spanned[String], expr: Expr, span: Span)
+  case ExprStmt(expr: Expr, span: Span)
+  case If(cond: Expr, thenBody: Block, elseBody: Block, span: Span)
+  case Print(expr: Expr, span: Span)
+
+  def span: Span
 }
 
 case class FnDef(
