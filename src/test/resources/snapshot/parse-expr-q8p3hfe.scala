@@ -1,0 +1,1 @@
+ParsedFile(List(),List(FnDef(Spanned(foo,Span(10,13)),List(),TypeRef(int,Span(17,20)),Block(List(VarDef(Spanned(x,Span(35,36)),IntLiteral(3,Span(39,40)),Span(31,50)), ExprStmt(IntLiteral(3,Span(50,51)),Span(50,58))),Span(21,59)),Span(7,59))))

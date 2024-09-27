@@ -28,7 +28,7 @@ object Parser {
     val id: P[String] =
       (P.charWhere(_.isUnicodeIdentifierStart) ~ P.charsWhile0(
         _.isUnicodeIdentifierPart
-      )).map { case (first, rest) => s"$first$rest" }
+      )).withContext("identifier").map { case (first, rest) => s"$first$rest" }
 
     val spannedId: P[Spanned[String]] = spanned(id)
 
@@ -37,7 +37,9 @@ object Parser {
         Spanned(parsed, Span(start, end))
       }
 
-    def keyword(kw: String): P[Unit] = id.filter(kw == _) *> P.unit
+    def keyword(kw: String): P[Unit] =
+      P.string(kw).soft *> P.peek(!P.charWhere(_.isUnicodeIdentifierPart))
+      // id.backtrack.filter(kw == _) *> P.unit
 
     def inParens[A](parser: P[A]): P[A] =
       parser.between(P.char('(') *> ws, ws *> P.char(')'))
@@ -57,7 +59,7 @@ object Parser {
           .surroundedBy(P.char('"'))
       ).map { case Spanned(text, span) => StringLiteral(text, span) }
     val literal = intLiteral | stringLiteral
-    val parenExpr = inParens(expr)
+    val parenExpr = inParens(expr).withContext("paren expr")
     val varRefOrFnCall =
       (P.index.with1 ~ id ~ inParens0(
         expr.repSep0(P.char(',') *> ws)
@@ -74,9 +76,9 @@ object Parser {
               Span(start, end)
             )
         }
-    val selectable: P[Expr] = varRefOrFnCall | parenExpr
+    val selectable: P[Expr] = varRefOrFnCall | parenExpr | literal
     val fieldAccess: P[Expr] =
-      (selectable ~ (ws.with1 *> P.char('.') *> ws *> spannedId).rep0).map {
+      ((selectable <* ws) ~ (spannedId <* ws).repSep0(P.char('.') *> ws)).map {
         case (obj, fields) =>
           fields.foldLeft(obj) { (obj, field) => FieldAccess(obj, field, None) }
       }
@@ -109,8 +111,9 @@ object Parser {
         Stmt.VarDef(name, expr, span) :: stmts
       }
     val exprStmt: P[List[Stmt]] =
-      (spanned(expr <* ws <* P.char(';')) ~ stmts).map {
-        case (Spanned(expr, span), stmts) => Stmt.ExprStmt(expr, span) :: stmts
+      (spanned(expr <* ws) ~ (P.char(';').soft *> stmts).?).map {
+        case (Spanned(expr, span), maybeStmts) =>
+          Stmt.ExprStmt(expr, span) :: maybeStmts.getOrElse(Nil)
       }
 
     val block: P[Block] =
@@ -135,7 +138,7 @@ object Parser {
     }
 
     val fieldDef: P[FieldDef] =
-      ((P.index ~ (keyword("mut") *> ws).backtrack.?).with1
+      ((P.index.soft ~ (keyword("mut") *> ws).backtrack.?).with1
         ~ (spannedId <* ws <* P.char(':') <* ws)
         ~ typeRef)
         .map { case (start -> mutable -> name -> typ) =>
@@ -150,15 +153,14 @@ object Parser {
       }
 
     val enumDef: P[TypeDef] =
-      (P.index.with1
+      (P.index.with1.soft
         ~ (keyword("data") *> ws *> spannedId <* ws <* P.char('=') <* ws)
         ~ enumCase.repSep0(P.char('|') *> ws) ~ P.index <* ws).map {
         case (start -> name -> cases -> end) =>
           TypeDef(name, cases, Span(start, end))
       }
 
-    val fileParser = (ws *> enumDef.rep0).map(
-      ParsedFile(_, Nil)
-    ) // (enumDef.rep0 ~ fnDef.rep0).map(ParsedFile(_, _))
+    val fileParser = (ws *> (enumDef <* ws).rep0 ~ (fnDef <* ws).rep0).map(ParsedFile(_, _))
+    // (ws *> (fnDef <* ws).rep0).map(ParsedFile(Nil, _))
   }
 }
