@@ -1,6 +1,6 @@
 package fred
 
-case class TypeRef(name: String, resolved: Option[Type], span: Span)
+case class TypeRef(name: String, span: Span)
 
 sealed trait Type {
   def span: Span
@@ -12,7 +12,7 @@ enum BuiltinType extends Type {
   override def span = Span.synthetic
 }
 
-case class EnumDef(name: Spanned[String], cases: List[EnumCase], span: Span) extends Type
+case class TypeDef(name: Spanned[String], cases: List[EnumCase], span: Span) extends Type
 
 case class EnumCase(name: Spanned[String], fields: List[FieldDef], span: Span)
 

@@ -8,6 +8,8 @@ object Span {
 
 case class Spanned[T](value: T, span: Span)
 
+case class ParsedFile(typeDefs: List[TypeDef], fns: List[FnDef])
+
 case class Block(stmts: List[Stmt], span: Span)
 
 enum Stmt {

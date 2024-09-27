@@ -1,0 +1,5 @@
+package fred
+
+object Typer {
+  
+}

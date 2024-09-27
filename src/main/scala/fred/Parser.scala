@@ -3,10 +3,8 @@ package fred
 import cats.parse.{Parser as P, Parser0 as P0}
 import cats.parse.Rfc5234.{crlf, digit, lf, sp}
 
-type FileTree = (List[EnumDef], List[FnDef])
-
 object Parser {
-  def parse(code: String): FileTree = {
+  def parse(code: String): ParsedFile = {
     ParserHelpers.fileParser.parseAll(code) match {
       case Right(parsed) => parsed
       case Left(err)     => throw RuntimeException(err.toString)
@@ -101,8 +99,9 @@ object Parser {
     val stmt: P[Stmt] = ???
 
     val block: P[Block] =
-      spanned(P.char('{') *> ws *> stmt.rep0 <* ws <* P.char('}')).map { case Spanned(stmts, span) =>
-        Block(stmts, span)
+      spanned(P.char('{') *> ws *> stmt.rep0 <* ws <* P.char('}')).map {
+        case Spanned(stmts, span) =>
+          Block(stmts, span)
       }
 
     val param: P[Param] =
@@ -117,7 +116,7 @@ object Parser {
     }
 
     val typeRef: P[TypeRef] = (P.index.with1 ~ id).map { case (start, name) =>
-      TypeRef(name, None, Span(start, start + name.length))
+      TypeRef(name, Span(start, start + name.length))
     }
 
     val fieldDef: P[FieldDef] = ((P.index ~ keyword(
@@ -133,15 +132,14 @@ object Parser {
           EnumCase(name, fields, Span(name.span.start, end))
       }
 
-    val enumDef: P[EnumDef] =
+    val enumDef: P[TypeDef] =
       (P.index.with1
         ~ (keyword("data") *> ws *> spannedId <* ws <* P.char('=') <* ws)
         ~ enumCase.repSep0(ws *> P.char('|') *> ws) ~ P.index).map {
         case (start -> name -> cases -> end) =>
-          EnumDef(name, cases, Span(start, end))
+          TypeDef(name, cases, Span(start, end))
       }
 
-    val fileParser: P0[FileTree] =
-      enumDef.rep0 ~ fnDef.rep0
+    val fileParser = (enumDef.rep0 ~ fnDef.rep0).map(ParsedFile(_, _))
   }
 }
