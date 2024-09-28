@@ -141,7 +141,7 @@ object Parser {
           }
         }
 
-    val seqAbleExpr = ifExpr | binOp3 // matchExpr
+    val seqAbleExpr = ifExpr | matchExpr
     val seqExpr = binOp(seqAbleExpr, P.stringIn(List(";")))
     def binOp(prev: P[Expr], op: P[String]): P[Expr] =
       ((prev <* ws) ~ (op ~ (P.index <* ws) ~ prev <* ws).rep0).map {

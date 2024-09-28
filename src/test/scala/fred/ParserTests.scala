@@ -18,7 +18,7 @@ class ParserTests extends munit.FunSuite with SnapshotAssertions {
       """)
     assertFileSnapshot(
       pprint.apply(parsed).plainText,
-      "parse-type-k7bu65.scala"
+      "parser/type-k7bu65.scala"
     )
   }
 
@@ -32,7 +32,7 @@ class ParserTests extends munit.FunSuite with SnapshotAssertions {
       """)
     assertFileSnapshot(
       pprint.apply(parsed).plainText,
-      "parse-expr-q8p3hfe.scala"
+      "parser/basic-expr-q8p3hfe.scala"
     )
   }
 
@@ -52,7 +52,40 @@ class ParserTests extends munit.FunSuite with SnapshotAssertions {
       """)
     assertFileSnapshot(
       pprint.apply(parsed).plainText,
-      "parse-if-expr-asp8eyof7.scala"
+      "parser/if-expr-asp8eyof7.scala"
+    )
+  }
+
+  test("Precedence of if and match") {
+    val parsed = Parser.parse("""
+      fn foo(): int {
+        if 1 then 2
+        else
+          3 match {
+          }
+      }
+      """)
+    assertFileSnapshot(
+      pprint.apply(parsed).plainText,
+      "parser/match-and-if-expr-aw83lasd.scala"
+    )
+  }
+
+  test("Parsing match expressions") {
+    val parsed = Parser.parse("""
+      fn foo(): int {
+        foo + 2 match {
+          Foo { a: b, c: d } => 7 + 2,
+          Bar { } => empty,
+          Blech { a: b } => single(thing)
+        } match {
+          ChainedMatch { } => just(because)
+        }
+      }
+      """)
+    assertFileSnapshot(
+      pprint.apply(parsed).plainText,
+      "parser/match-expr-qpw8jf.scala"
     )
   }
 }
