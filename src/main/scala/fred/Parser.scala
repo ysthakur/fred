@@ -1,7 +1,7 @@
 package fred
 
 import cats.parse.{Parser as P, Parser0 as P0}
-import cats.parse.Rfc5234.{crlf, digit, lf, sp}
+import cats.parse.Rfc5234.{alpha, crlf, digit, lf, sp}
 
 object Parser {
   def parse(code: String): ParsedFile = {
@@ -26,16 +26,15 @@ object Parser {
       def ~~[B](p2: P0[B]): P0[(A, B)] = (p1 <* ws) ~ p2
 
     val Keywords =
-      Set("data", "fn", "match", "let", "in", "if", "else", "print")
+      Set("data", "fn", "match", "let", "in", "if", "then", "else", "print")
 
-    val id: P[String] =
-      (P.charWhere(_.isUnicodeIdentifierStart) ~ P.charsWhile0(
-        _.isUnicodeIdentifierPart
-      ))
-        .map { case (first, rest) => s"$first$rest" }
-        .filter(!Keywords.contains(_))
-        .backtrack
-        .withContext("identifier")
+    // Not using Char.isUnicodeIentifierStart/Part for simplicity
+    val idStart = alpha | P.char('_')
+    val idPart = alpha | digit | P.char('_')
+    val id: P[String] = (idStart ~ idPart.rep0).string
+      .filter(!Keywords.contains(_))
+      .backtrack
+      .withContext("identifier")
 
     val spannedId: P[Spanned[String]] = spanned(id)
 
@@ -45,7 +44,7 @@ object Parser {
       }
 
     def keyword(kw: String): P[Unit] =
-      P.string(kw).soft *> P.peek(!P.charWhere(_.isUnicodeIdentifierPart))
+      P.string(kw).soft *> P.peek(!idPart)
       // id.backtrack.filter(kw == _) *> P.unit
 
     def inParens[A](parser: P0[A]): P[A] =
@@ -60,18 +59,34 @@ object Parser {
         (keyword("let") *> ws *> spannedId <* ws <* P.char('=') <* ws)
           ~ (expr <* ws <* keyword("in") <* ws)
       )
-        ~ expr).map { case (Spanned((name, value), span), body) =>
-        LetExpr(name, value, body, span)
-      }
+        ~ expr)
+        .map { case (Spanned((name, value), span), body) =>
+          LetExpr(name, value, body, span)
+        }
+        .withContext("let expr")
 
-    val intLiteral: P[Expr] = (digit.rep.string ~ P.index).map {
-      case (num, end) => IntLiteral(num.toInt, Span(end - num.length, end))
-    }
+    val ifExpr: P[Expr] =
+      spanned(
+        keyword("if") *> ws
+          *> (expr <* ws <* keyword("then") <* ws)
+          ~ (expr <* ws <* keyword("else") <* ws)
+          ~ expr
+      ).map { case Spanned(cond -> thenBody -> elseBody, span) =>
+        IfExpr(cond, thenBody, elseBody, span)
+      }.withContext("if expr")
+
+    val intLiteral: P[Expr] = (digit.rep.string ~ P.index)
+      .map { case (num, end) =>
+        IntLiteral(num.toInt, Span(end - num.length, end))
+      }
+      .withContext("int literal")
     val stringLiteral: P[StringLiteral] =
       spanned(
-        ((P.char('\\') ~ P.anyChar) | (P.charWhere(_ != '"'))).rep.string
-          .surroundedBy(P.char('"'))
+        P.char('"')
+          *> ((P.char('\\') ~ P.anyChar) | (P.charWhere(_ != '"'))).rep.string
+          <* P.char('"')
       ).map { case Spanned(text, span) => StringLiteral(text, span) }
+        .withContext("str literal")
     val literal = intLiteral | stringLiteral
     val parenExpr = inParens(expr).withContext("paren expr")
     val varRefOrFnCall =
@@ -99,7 +114,35 @@ object Parser {
     val binOp1 = binOp(fieldAccess, P.stringIn(List("*", "/")))
     val binOp2 = binOp(binOp1, P.stringIn(List("+", "-")))
     val binOp3 = binOp(binOp2, P.stringIn(List(">=", "<=", ">", "<", "=")))
-    val seqExpr = binOp(binOp3, P.stringIn(List(";")))
+
+    val matchPattern: P[MatchPattern] = (
+      (spannedId <* ws) ~ inBraces(
+        ((spannedId <* ws <* P.char(':') <* ws) ~ spannedId <* ws)
+          .repSep0(P.char(',') <* ws)
+      )
+    ).map { case (ctorName, bindings) =>
+      MatchPattern(ctorName, bindings)
+    }
+    val matchArm: P[MatchArm] =
+      spanned((matchPattern <* ws <* P.string("=>") <* ws) ~ expr)
+        .map { case Spanned((pat, body), span) =>
+          MatchArm(pat, body, span)
+        }
+        .withContext("match arm")
+    val matchExpr =
+      ((binOp3 <* ws)
+        ~ spanned(
+          keyword("match") *> ws
+            *> inBraces((matchArm <* ws).repSep0(P.char(',') *> ws)) <* ws
+        ).rep0)
+        .map { case (obj, matches) =>
+          matches.foldLeft(obj) { case (obj, Spanned(matchArms, armsSpan)) =>
+            MatchExpr(obj, matchArms, armsSpan)
+          }
+        }
+
+    val seqAbleExpr = ifExpr | binOp3 // matchExpr
+    val seqExpr = binOp(seqAbleExpr, P.stringIn(List(";")))
     def binOp(prev: P[Expr], op: P[String]): P[Expr] =
       ((prev <* ws) ~ (op ~ (P.index <* ws) ~ prev <* ws).rep0).map {
         case (left, reps) =>

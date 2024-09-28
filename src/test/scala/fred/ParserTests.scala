@@ -16,17 +16,43 @@ class ParserTests extends munit.FunSuite with SnapshotAssertions {
             mut gah: int
           }
       """)
-    assertFileSnapshot(parsed.toString, "parse-type-k7bu65.scala")
+    assertFileSnapshot(
+      pprint.apply(parsed).plainText,
+      "parse-type-k7bu65.scala"
+    )
   }
 
-  test("Parsing expressions") {
+  test("Parsing basic expressions") {
     val parsed = Parser.parse("""
-      fn foo(): int {
+      fn foo(param: ParamType, bleh: int): int {
         let x = 3 in
         foo(bleh, 4 + x);
         x
       }
       """)
-    assertFileSnapshot(parsed.toString, "parse-expr-q8p3hfe.scala")
+    assertFileSnapshot(
+      pprint.apply(parsed).plainText,
+      "parse-expr-q8p3hfe.scala"
+    )
+  }
+
+  test("Parsing if expressions") {
+    val parsed = Parser.parse("""
+      fn foo(): int {
+        if foo then
+          if bar then x else y
+        else
+          if 3 + 2 then
+            bleh();
+            5
+          else
+            foo();
+            bar
+      }
+      """)
+    assertFileSnapshot(
+      pprint.apply(parsed).plainText,
+      "parse-if-expr-asp8eyof7.scala"
+    )
   }
 }

@@ -10,6 +10,13 @@ case class Spanned[T](value: T, span: Span)
 
 case class ParsedFile(typeDefs: List[TypeDef], fns: List[FnDef])
 
+case class MatchExpr(obj: Expr, arms: List[MatchArm], armsSpan: Span)
+    extends Expr {
+  override def span = Span(obj.span.start, armsSpan.end)
+
+  def typ = None
+}
+
 case class MatchArm(pat: MatchPattern, body: Expr, span: Span)
 
 /** For now, you can only have patterns that look like `Foo { a: a, b: b }`. No
@@ -82,5 +89,10 @@ case class BinExpr(lhs: Expr, op: Spanned[BinOp], rhs: Expr, typ: Option[Type])
 
 case class LetExpr(name: Spanned[String], value: Expr, body: Expr, span: Span)
     extends Expr {
-  def typ = None
+  override def typ = None
+}
+
+case class IfExpr(cond: Expr, thenBody: Expr, elseBody: Expr, span: Span)
+    extends Expr {
+  override def typ = None
 }
