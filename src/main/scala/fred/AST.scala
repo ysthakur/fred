@@ -10,22 +10,21 @@ case class Spanned[T](value: T, span: Span)
 
 case class ParsedFile(typeDefs: List[TypeDef], fns: List[FnDef])
 
-case class Block(stmts: List[Stmt], span: Span)
+case class MatchArm(pat: MatchPattern, body: Expr, span: Span)
 
-enum Stmt {
-  case VarDef(name: Spanned[String], expr: Expr, span: Span)
-  case ExprStmt(expr: Expr, span: Span)
-  case If(cond: Expr, thenBody: Block, elseBody: Block, span: Span)
-  case Print(expr: Expr, span: Span)
-
-  def span: Span
-}
+/** For now, you can only have patterns that look like `Foo { a: a, b: b }`. No
+  * nested constructors
+  */
+case class MatchPattern(
+    ctorName: Spanned[String],
+    bindings: List[(Spanned[String], Spanned[String])]
+)
 
 case class FnDef(
     name: Spanned[String],
     params: List[Param],
     returnType: TypeRef,
-    body: Block,
+    body: Expr,
     span: Span
 )
 
@@ -73,6 +72,7 @@ enum BinOp(val text: String) {
   case Lteq extends BinOp("<=")
   case Gt extends BinOp(">")
   case Gteq extends BinOp(">=")
+  case Seq extends BinOp(";")
 }
 
 case class BinExpr(lhs: Expr, op: Spanned[BinOp], rhs: Expr, typ: Option[Type])
@@ -80,17 +80,7 @@ case class BinExpr(lhs: Expr, op: Spanned[BinOp], rhs: Expr, typ: Option[Type])
   override def span = Span(lhs.span.start, rhs.span.end)
 }
 
-case class MatchExpr(
-    obj: Expr,
-    cases: List[MatchCase],
-    typ: Option[Type],
-    span: Span
-) extends Expr
-
-case class MatchCase(pattern: MatchPattern, body: Block)
-
-case class MatchPattern(
-    ctorName: Spanned[String],
-    bindings: List[Spanned[String]],
-    span: Span
-)
+case class LetExpr(name: Spanned[String], value: Expr, body: Expr, span: Span)
+    extends Expr {
+  def typ = None
+}

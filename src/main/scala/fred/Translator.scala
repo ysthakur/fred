@@ -26,9 +26,24 @@ object Translator {
 
   private def enumCaseToC(enumCase: EnumCase) = {
     val fields = enumCase.fields
-      .map(field => s"${typeRefToC(field.typ)} ${field.name.value};")
+      .map { field =>
+        s"${typeRefToC(field.typ)} ${mangledFieldName(enumCase, field.name.value)};"
+      }
       .mkString(" ")
     s"struct { $fields };"
+  }
+
+  private def fnToC(fn: FnDef) = {
+    val params = fn.params
+      .map(param => s"${typeRefToC(param.typ)} ${param.name.value}")
+      .mkString(", ")
+    s"""|${typeRefToC(fn.returnType)} ${fn.name.value} ($params) {
+        |${indent(2)(exprToC(fn.body))}
+        |}""".stripMargin
+  }
+
+  private def exprToC(expr: Expr) = {
+    ""
   }
 
   private def typeRefToC(typeRef: TypeRef) = {
@@ -39,10 +54,24 @@ object Translator {
     }
   }
 
+  /** Field names need to be mangled so that multiple cases can have fields with
+    * the same name
+    *
+    * @param enumCase
+    *   The enum case/variant inside which this field is
+    */
+  private def mangledFieldName(enumCase: EnumCase, field: String) = {
+    s"${field}_${enumCase.name.value}"
+  }
+
   /** Mangle a constructor name to use it as the tag for a tagged union
     * representing the original ADT
     */
   private def tagName(ctorName: String): String = s"${ctorName}_tag"
 
-  private def fnToC(fn: FnDef) = {}
+  /** Apply `2 * level` spaces of indentation to every line in the given string
+    */
+  private def indent(level: Int)(s: String): String = {
+    s.split("\n").map(line => "  " * level + level).mkString("\n")
+  }
 }

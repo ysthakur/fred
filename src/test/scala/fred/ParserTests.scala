@@ -22,8 +22,9 @@ class ParserTests extends munit.FunSuite with SnapshotAssertions {
   test("Parsing expressions") {
     val parsed = Parser.parse("""
       fn foo(): int {
-        let x = 3;
-        3
+        let x = 3 in
+        foo(bleh, 4 + x);
+        x
       }
       """)
     assertFileSnapshot(parsed.toString, "parse-expr-q8p3hfe.scala")

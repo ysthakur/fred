@@ -10,7 +10,7 @@ object Parser {
       case Left(err) =>
         val badCode = code.substring(0, err.failedAtOffset)
         throw RuntimeException(s"""|Failed: $err
-              |Code: $badCode""".stripMargin)
+                                   |Code: $badCode""".stripMargin)
     }
   }
 
@@ -25,10 +25,17 @@ object Parser {
       /** Like `~`, but allows whitespace in between */
       def ~~[B](p2: P0[B]): P0[(A, B)] = (p1 <* ws) ~ p2
 
+    val Keywords =
+      Set("data", "fn", "match", "let", "in", "if", "else", "print")
+
     val id: P[String] =
       (P.charWhere(_.isUnicodeIdentifierStart) ~ P.charsWhile0(
         _.isUnicodeIdentifierPart
-      )).withContext("identifier").map { case (first, rest) => s"$first$rest" }
+      ))
+        .map { case (first, rest) => s"$first$rest" }
+        .filter(!Keywords.contains(_))
+        .backtrack
+        .withContext("identifier")
 
     val spannedId: P[Spanned[String]] = spanned(id)
 
@@ -41,14 +48,21 @@ object Parser {
       P.string(kw).soft *> P.peek(!P.charWhere(_.isUnicodeIdentifierPart))
       // id.backtrack.filter(kw == _) *> P.unit
 
-    def inParens[A](parser: P[A]): P[A] =
-      parser.between(P.char('(') *> ws, ws *> P.char(')'))
-    def inParens0[A](parser: P0[A]): P0[A] =
-      parser.between(P.char('(') *> ws, ws *> P.char(')'))
-    def inBraces0[A](parser: P0[A]): P0[A] =
-      parser.between(P.char('{') *> ws, ws *> P.char('}'))
+    def inParens[A](parser: P0[A]): P[A] =
+      P.char('(') *> ws *> parser <* ws <* P.char(')')
+    def inBraces[A](parser: P0[A]): P[A] =
+      P.char('{') *> ws *> parser <* ws <* P.char('}')
 
     val expr: P[Expr] = P.defer(exprLazy <* ws)
+
+    val letExpr: P[Expr] =
+      (spanned(
+        (keyword("let") *> ws *> spannedId <* ws <* P.char('=') <* ws)
+          ~ (expr <* ws <* keyword("in") <* ws)
+      )
+        ~ expr).map { case (Spanned((name, value), span), body) =>
+        LetExpr(name, value, body, span)
+      }
 
     val intLiteral: P[Expr] = (digit.rep.string ~ P.index).map {
       case (num, end) => IntLiteral(num.toInt, Span(end - num.length, end))
@@ -61,7 +75,7 @@ object Parser {
     val literal = intLiteral | stringLiteral
     val parenExpr = inParens(expr).withContext("paren expr")
     val varRefOrFnCall =
-      (P.index.with1 ~ id ~ inParens0(
+      (P.index.with1 ~ id ~ inParens(
         expr.repSep0(P.char(',') *> ws)
       ).? ~ P.index)
         .map {
@@ -85,6 +99,7 @@ object Parser {
     val binOp1 = binOp(fieldAccess, P.stringIn(List("*", "/")))
     val binOp2 = binOp(binOp1, P.stringIn(List("+", "-")))
     val binOp3 = binOp(binOp2, P.stringIn(List(">=", "<=", ">", "<", "=")))
+    val seqExpr = binOp(binOp3, P.stringIn(List(";")))
     def binOp(prev: P[Expr], op: P[String]): P[Expr] =
       ((prev <* ws) ~ (op ~ (P.index <* ws) ~ prev <* ws).rep0).map {
         case (left, reps) =>
@@ -99,28 +114,7 @@ object Parser {
           }
       }
 
-    lazy val exprLazy: P[Expr] = binOp3
-
-    val stmts: P[List[Stmt]] = P.defer(let | exprStmt)
-    val let: P[List[Stmt]] =
-      (spanned(
-        (keyword("let") *> ws *> spannedId <* ws <* P.char('=') <* ws)
-          ~ (expr <* ws <* P.char(';') <* ws)
-      )
-        ~ stmts).map { case (Spanned((name, expr), span), stmts) =>
-        Stmt.VarDef(name, expr, span) :: stmts
-      }
-    val exprStmt: P[List[Stmt]] =
-      (spanned(expr <* ws) ~ (P.char(';').soft *> stmts).?).map {
-        case (Spanned(expr, span), maybeStmts) =>
-          Stmt.ExprStmt(expr, span) :: maybeStmts.getOrElse(Nil)
-      }
-
-    val block: P[Block] =
-      spanned(P.char('{') *> ws *> stmts <* ws <* P.char('}')).map {
-        case Spanned(stmts, span) =>
-          Block(stmts, span)
-      }
+    lazy val exprLazy: P[Expr] = letExpr | seqExpr
 
     val typeRef: P[TypeRef] = (P.index.with1 ~ id).map { case (start, name) =>
       TypeRef(name, Span(start, start + name.length))
@@ -133,8 +127,9 @@ object Parser {
       ~ (spannedId <* ws <* P.char('(') <* ws)
       ~ ((param <* ws).repSep0(P.char(',') *> ws) <* ws <* P.char(')') <* ws)
       ~ (P.char(':') *> ws *> typeRef <* ws)
-      ~ block).map { case (start -> name -> params -> returnType -> body) =>
-      FnDef(name, params, returnType, body, Span(start, body.span.end))
+      ~ inBraces(expr)).map {
+      case (start -> name -> params -> returnType -> body) =>
+        FnDef(name, params, returnType, body, Span(start, body.span.end))
     }
 
     val fieldDef: P[FieldDef] =
@@ -147,7 +142,7 @@ object Parser {
 
     val enumCase: P[EnumCase] =
       ((spannedId <* ws)
-        ~ inBraces0((fieldDef <* ws).repSep0(P.char(',') *> ws))
+        ~ inBraces((fieldDef <* ws).repSep0(P.char(',') *> ws))
         ~ P.index <* ws).map { case (name -> fields -> end) =>
         EnumCase(name, fields, Span(name.span.start, end))
       }
@@ -160,7 +155,8 @@ object Parser {
           TypeDef(name, cases, Span(start, end))
       }
 
-    val fileParser = (ws *> (enumDef <* ws).rep0 ~ (fnDef <* ws).rep0).map(ParsedFile(_, _))
+    val fileParser =
+      (ws *> (enumDef <* ws).rep0 ~ (fnDef <* ws).rep0).map(ParsedFile(_, _))
     // (ws *> (fnDef <* ws).rep0).map(ParsedFile(Nil, _))
   }
 }
