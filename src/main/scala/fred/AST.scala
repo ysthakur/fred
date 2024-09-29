@@ -96,3 +96,21 @@ case class IfExpr(cond: Expr, thenBody: Expr, elseBody: Expr, span: Span)
     extends Expr {
   override def typ = None
 }
+
+/** What a variable reference can resolve to
+  */
+enum VarDef {
+  case Let(expr: LetExpr, typ: Type)
+  case Param(param: fred.Param, typ: Type)
+
+  /** @param matchExpr
+    *   The match expression inside which this pattern is
+    * @param pat
+    *   The specific pattern inside which the binding is
+    * @param field
+    *   The original name of the field inside that constructor
+    */
+  case Pat(matchExpr: MatchExpr, pat: MatchPattern, field: String, typ: Type)
+
+  def typ: Type
+}

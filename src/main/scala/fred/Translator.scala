@@ -10,7 +10,7 @@ object Translator {
   }
 
   private def typeToC(typ: TypeDef) = {
-    val name = typ.name.value
+    val name = typ.name
     val tagNames =
       typ.cases.map(enumCase => tagName(enumCase.name.value)).mkString(", ")
     val tagEnum = s"enum ${name}_kind { ${tagNames} };"

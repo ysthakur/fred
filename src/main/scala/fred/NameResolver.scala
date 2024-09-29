@@ -9,6 +9,6 @@ object NameResolver {
       fn.returnType :: fn.params.map(_.typ)
     }
     val allTypes = fieldTypes ::: fnTypes
-    allTypes.filter(typ => file.typeDefs.forall(_.name.value != typ.name))
+    allTypes.filter(typ => file.typeDefs.forall(_.name != typ.name))
   }
 }
