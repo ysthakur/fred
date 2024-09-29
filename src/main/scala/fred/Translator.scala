@@ -38,12 +38,31 @@ object Translator {
       .map(param => s"${typeRefToC(param.typ)} ${param.name.value}")
       .mkString(", ")
     s"""|${typeRefToC(fn.returnType)} ${fn.name.value} ($params) {
-        |${indent(2)(exprToC(fn.body))}
+        |${indent(2)(exprToC(fn.body)._2)}
         |}""".stripMargin
   }
 
-  private def exprToC(expr: Expr) = {
-    ""
+  /** @return
+    *   A tuple containing the C code for setup and the C code for the actual
+    *   expression. The first string is necessary for let expressions, match
+    *   expressions, and the like, where in C, you need some statements to
+    *   define a variable before you can use it in an expression
+    */
+  private def exprToC(expr: Expr): (List[String], String) = {
+    expr match {
+      case IntLiteral(value, _) => (Nil, value.toString)
+      case StringLiteral(value, _) =>
+        (Nil, s"\"${value.replace("\"", "\\\"")}\"")
+      case VarRef(name, _, _)                            => (Nil, name)
+      case BinExpr(lhs, op, rhs, typ) if op == BinOp.Seq => ???
+      case BinExpr(lhs, op, rhs, typ) =>
+        val (lhsSetup, lhsTranslated) = exprToC(lhs)
+        val (rhsSetup, rhsTranslated) = exprToC(rhs)
+        (
+          lhsSetup ++ rhsSetup,
+          s"$lhsTranslated ${op.value.text} $rhsTranslated"
+        )
+    }
   }
 
   private def typeRefToC(typeRef: TypeRef) = {
