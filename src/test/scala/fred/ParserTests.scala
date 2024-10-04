@@ -24,11 +24,10 @@ class ParserTests extends munit.FunSuite with SnapshotAssertions {
 
   test("Parsing basic expressions") {
     val parsed = Parser.parse("""
-      fn foo(param: ParamType, bleh: int): int {
+      fn foo(param: ParamType, bleh: int): int =
         let x = 3 in
         foo(bleh, 4 + x);
         x
-      }
       """)
     assertFileSnapshot(
       pprint.apply(parsed).plainText,
@@ -38,7 +37,7 @@ class ParserTests extends munit.FunSuite with SnapshotAssertions {
 
   test("Parsing if expressions") {
     val parsed = Parser.parse("""
-      fn foo(): int {
+      fn foo(): int =
         if foo then
           if bar then x else y
         else
@@ -48,7 +47,6 @@ class ParserTests extends munit.FunSuite with SnapshotAssertions {
           else
             foo();
             bar
-      }
       """)
     assertFileSnapshot(
       pprint.apply(parsed).plainText,
@@ -58,12 +56,11 @@ class ParserTests extends munit.FunSuite with SnapshotAssertions {
 
   test("Precedence of if and match") {
     val parsed = Parser.parse("""
-      fn foo(): int {
+      fn foo(): int =
         if 1 then 2
         else
           3 match {
           }
-      }
       """)
     assertFileSnapshot(
       pprint.apply(parsed).plainText,
@@ -73,7 +70,7 @@ class ParserTests extends munit.FunSuite with SnapshotAssertions {
 
   test("Parsing match expressions") {
     val parsed = Parser.parse("""
-      fn foo(): int {
+      fn foo(): int =
         foo + 2 match {
           Foo { a: b, c: d } => 7 + 2,
           Bar { } => empty,
@@ -81,7 +78,6 @@ class ParserTests extends munit.FunSuite with SnapshotAssertions {
         } match {
           ChainedMatch { } => just(because)
         }
-      }
       """)
     assertFileSnapshot(
       pprint.apply(parsed).plainText,

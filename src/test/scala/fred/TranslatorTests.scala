@@ -17,6 +17,6 @@ class TranslatorTests extends munit.FunSuite with SnapshotAssertions {
           }
       """)
     val generated = Translator.toC(parsed)
-    assertFileSnapshot(generated.toString, "gen-type-aslid7fy.c")
+    assertFileSnapshot(generated.toString, "gen/type-aslid7fy.c")
   }
 }

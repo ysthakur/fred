@@ -10,6 +10,48 @@ case class Bindings(
     fns: Map[String, FnDef],
     vars: Map[String, VarDef]
 ) {
+  def enterFn(fn: FnDef): Bindings = {
+    val paramBindings = fn.params.map { param =>
+      param.name.value -> VarDef.Param(param, this.getType(param.typ))
+    }.toMap
+    this.copy(vars = this.vars ++ paramBindings)
+  }
+
+  def enterPattern(
+      matchExpr: MatchExpr,
+      pat: MatchPattern,
+      typ: TypeDef
+  ): Bindings = {
+    val newVars = mutable.Map.from(this.vars)
+
+    val ctor = typ.cases.find(_.name.value == pat.ctorName.value) match {
+      case Some(variant) => variant
+      case None =>
+        throw new CompileError(
+          s"No such constructor: ${pat.ctorName.value}",
+          pat.ctorName.span
+        )
+    }
+
+    for ((fieldName, varName) <- pat.bindings) {
+      val typ =
+        ctor.fields.find(_.name.value == fieldName.value) match {
+          case Some(fieldDef) => this.getType(fieldDef.typ)
+          case None =>
+            throw new CompileError(
+              s"No such field: ${fieldName.value}",
+              fieldName.span
+            )
+        }
+      newVars.put(
+        varName.value,
+        VarDef.Pat(matchExpr, pat, fieldName.value, typ)
+      )
+    }
+
+    this.copy(vars = newVars.toMap)
+  }
+
   def withVar(varName: String, varDef: VarDef): Bindings =
     this.copy(vars = this.vars + (varName -> varDef))
 
@@ -45,11 +87,13 @@ object Typer {
       vars = Map.empty
     )
     for (fn <- file.fns) {
-      val paramBindings = fn.params.map { param =>
-        param.name.value -> VarDef.Param(param, bindings.getType(param.typ))
-      }.toMap
-      val newBindings = bindings.copy(vars = bindings.vars ++ paramBindings)
-      resolveExprType(fn.body, newBindings, types)
+      val got = resolveExprType(fn.body, bindings.enterFn(fn), types)
+      if (got.name != fn.returnType.name) {
+        throw new CompileError(
+          s"Expected ${fn.returnType.name}, got ${got.name}",
+          fn.returnType.span
+        )
+      }
     }
     Typer(types.toMap)
   }
@@ -63,13 +107,17 @@ object Typer {
       types: mutable.Map[Expr, Type]
   )(using file: ParsedFile): Type = {
     expr match {
+      case FieldAccess(obj, field, typ) => ???
       case IntLiteral(_, _) =>
         types.put(expr, BuiltinType.Int)
         BuiltinType.Int
       case StringLiteral(_, _) =>
         types.put(expr, BuiltinType.Str)
         BuiltinType.Str
-      case varRef @ VarRef(_, _, _) => bindings.getVar(varRef).typ
+      case varRef @ VarRef(_, _, _) =>
+        val typ = bindings.getVar(varRef).typ
+        types.put(expr, typ)
+        typ
       case FnCall(Spanned(name, nameSpan), args, _, _, span) =>
         file.fns.find(_.name.value == name) match {
           case Some(fn) =>
@@ -84,6 +132,30 @@ object Typer {
               s"No such function: $name",
               nameSpan
             )
+        }
+      case BinExpr(lhs, op, rhs, typ) =>
+        op.value match {
+          case BinOp.Plus | BinOp.Minus | BinOp.Mul | BinOp.Div | BinOp.Eq |
+              BinOp.Lt | BinOp.Lteq | BinOp.Gt | BinOp.Gteq =>
+            if (resolveExprType(lhs, bindings, types) != BuiltinType.Int) {
+              throw new CompileError(
+                s"Operator ${op.value.text} takes ints",
+                lhs.span
+              )
+            }
+            if (resolveExprType(rhs, bindings, types) != BuiltinType.Int) {
+              throw new CompileError(
+                s"Operator ${op.value.text} takes ints",
+                rhs.span
+              )
+            }
+            types.put(expr, BuiltinType.Int)
+            BuiltinType.Int
+          case BinOp.Seq =>
+            resolveExprType(lhs, bindings, types)
+            val typ = resolveExprType(rhs, bindings, types)
+            types.put(expr, typ)
+            typ
         }
       case IfExpr(cond, thenBody, elseBody, span) =>
         val condType = resolveExprType(cond, bindings, types)
@@ -111,45 +183,29 @@ object Typer {
         types.put(expr, bodyType)
         bodyType
       case matchExpr @ MatchExpr(obj, arms, armsSpan) =>
-        val objType = resolveExprType(obj, bindings, types)
-        val variants = objType match {
-          case TypeDef(typeName, variants, _) => variants
+        val objType = resolveExprType(obj, bindings, types) match {
+          case td: TypeDef => td
           case BuiltinType.Str =>
-            throw new CompileError("Can't match against strings", expr.span)
+            throw new CompileError(
+              "Can't match against strings",
+              expr.span
+            )
           case BuiltinType.Int =>
             throw new CompileError("Can't match against ints", expr.span)
         }
+        // TODO this doesn't check that all variants are covered
         val armTypes = arms.map {
           case MatchArm(
-                pat @ MatchPattern(ctorName, patBindings),
+                pat,
                 body,
                 span
               ) =>
-            val ctor = variants.find(_.name.value == ctorName.value) match {
-              case Some(variant) => variant
-              case None =>
-                throw new CompileError(
-                  s"No such constructor: ${ctorName.value}",
-                  ctorName.span
-                )
-            }
-            val newBindings = patBindings.foldLeft(bindings) {
-              case (oldBindings, (fieldName, varName)) =>
-                val typ =
-                  ctor.fields.find(_.name.value == fieldName.value) match {
-                    case Some(fieldDef) => bindings.getType(fieldDef.typ)
-                    case None =>
-                      throw new CompileError(
-                        s"No such field: ${fieldName.value}",
-                        fieldName.span
-                      )
-                  }
-                oldBindings.withVar(
-                  varName.value,
-                  VarDef.Pat(matchExpr, pat, fieldName.value, typ)
-                )
-            }
-            (resolveExprType(body, newBindings, types), span)
+            val armType = resolveExprType(
+              body,
+              bindings.enterPattern(matchExpr, pat, objType),
+              types
+            )
+            (armType, span)
         }
 
         val (firstArmType, _) = armTypes.head

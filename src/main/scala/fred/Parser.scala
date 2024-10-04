@@ -170,7 +170,7 @@ object Parser {
       ~ (spannedId <* ws <* P.char('(') <* ws)
       ~ ((param <* ws).repSep0(P.char(',') *> ws) <* ws <* P.char(')') <* ws)
       ~ (P.char(':') *> ws *> typeRef <* ws)
-      ~ inBraces(expr)).map {
+      ~ (P.char('=') *> ws *> expr)).map {
       case (start -> name -> params -> returnType -> body) =>
         FnDef(name, params, returnType, body, Span(start, body.span.end))
     }

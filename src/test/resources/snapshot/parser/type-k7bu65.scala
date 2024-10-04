@@ -1,7 +1,7 @@
 ParsedFile(
   typeDefs = List(
     TypeDef(
-      name = Spanned(value = "Foo", span = Span(start = 12, end = 15)),
+      nameSpanned = Spanned(value = "Foo", span = Span(start = 12, end = 15)),
       cases = List(
         EnumCase(
           name = Spanned(value = "Bar", span = Span(start = 26, end = 29)),
