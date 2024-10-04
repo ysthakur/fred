@@ -3,6 +3,6 @@ struct Foo {
   enum Foo_kind kind;
   union {
     struct { Foo* foo_Bar; Fred* fred_Bar; };
-    struct { Bar* blech_Baz; int gah_Baz; };
+    struct { char* blech_Baz; int gah_Baz; };
   };
 };

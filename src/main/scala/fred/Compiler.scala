@@ -3,7 +3,7 @@ package fred
 object Compiler {
   def compile(code: String): String = {
     val parsedFile = Parser.parse(code)
-    val typer =
+    given typer: Typer =
       try {
         Typer.resolveAllTypes(parsedFile)
       } catch {

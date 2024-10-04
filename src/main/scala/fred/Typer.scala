@@ -70,14 +70,9 @@ case class Bindings(
     }
 }
 
-object Typer {
-
-  /** Step through all expressions in the file and find their types
-    */
-  def resolveAllTypes(file: ParsedFile): Typer = {
-    given ParsedFile = file
-    val types = mutable.Map.empty[Expr, Type]
-    val bindings = Bindings(
+object Bindings {
+  def fromFile(file: ParsedFile): Bindings = {
+    Bindings(
       types = file.typeDefs.map(typeDef => (typeDef.name, typeDef)).toMap
         ++ Map("int" -> BuiltinType.Int, "str" -> BuiltinType.Str),
       ctors = file.typeDefs.flatMap { typeDef =>
@@ -86,6 +81,17 @@ object Typer {
       fns = file.fns.map(fn => (fn.name.value, fn)).toMap,
       vars = Map.empty
     )
+  }
+}
+
+object Typer {
+
+  /** Step through all expressions in the file and find their types
+    */
+  def resolveAllTypes(file: ParsedFile): Typer = {
+    given ParsedFile = file
+    val types = mutable.Map.empty[Expr, Type]
+    val bindings = Bindings.fromFile(file)
     for (fn <- file.fns) {
       val got = resolveExprType(fn.body, bindings.enterFn(fn), types)
       if (got.name != fn.returnType.name) {
