@@ -1,5 +1,6 @@
 enum Foo_kind { Bar_tag, Baz_tag };
 struct Foo {
+  int rc;
   enum Foo_kind kind;
   char* common;
   union {
@@ -9,5 +10,7 @@ struct Foo {
 };
 char* foo (struct Foo* param) {
   
-  return param->common;
+  char* var$5862a823 = param->common;
+  
+  return var$5862a823;
 }

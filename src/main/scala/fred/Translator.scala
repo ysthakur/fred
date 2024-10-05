@@ -70,9 +70,9 @@ object Translator {
     val typeToC = typeRefToC(fn.returnType.name)
     val resVar = newVar(fn.hashCode())
     s"""|$typeToC ${fn.name.value} ($params) {
-        |${indent(1)(bodySetup.getOrElse(""))}
+        |${indent(1)(bodySetup)}
         |  $typeToC $resVar = $body;
-        |${indent(1)(bodyTeardown.getOrElse(""))}
+        |${indent(1)(bodyTeardown)}
         |  return $resVar;
         |}""".stripMargin
   }
@@ -89,34 +89,33 @@ object Translator {
   )(using
       bindings: Bindings,
       typer: Typer
-  ): (Option[String], String, Option[String]) = {
+  ): (String, String, String) = {
     expr match {
-      case IntLiteral(value, _) => (None, value.toString, None)
+      case IntLiteral(value, _) => ("", value.toString, "")
       case StringLiteral(value, _) =>
-        (None, s"\"${value.replace("\"", "\\\"")}\"", None)
-      case VarRef(name, _, _) => (None, name, None)
+        ("", s"\"${value.replace("\"", "\\\"")}\"", "")
+      case VarRef(name, _, _) => ("", name, "")
       case BinExpr(lhs, op, rhs, typ) =>
         val (lhsSetup, lhsTranslated, lhsTeardown) = exprToC(lhs)
         val (rhsSetup, rhsTranslated, rhsTeardown) = exprToC(rhs)
-        val toC = if (op.value == BinOp.Seq) {
-          s"($lhsTranslated, $rhsTranslated)"
+        val setup = s"$lhsSetup\n$rhsSetup"
+        val teardown = s"$lhsTeardown\n$rhsTeardown"
+        if (op.value == BinOp.Seq) {
+          (s"$setup\n$lhsTranslated;", rhsTranslated, teardown)
         } else {
-          s"$lhsTranslated ${op.value.text} $rhsTranslated"
+          (setup, s"$lhsTranslated ${op.value.text} $rhsTranslated", teardown)
         }
-        (merge(lhsSetup, rhsSetup), toC, merge(lhsTeardown, rhsTeardown))
       case letExpr @ fred.LetExpr(name, value, body, _) =>
         val (valueSetup, valueToC, valueTeardown) = exprToC(value)
         val typ = typer.types(value)
-        val setup = s"""|${typeRefToC(typ.name)} ${name.value} = $valueToC;
-                        |""".stripMargin
+        val (letSetup, letTeardown) = addBinding(name.value, valueToC, typ)
         val (bodySetup, bodyToC, bodyTeardown) = exprToC(body)(using
           bindings.withVar(name.value, VarDef.Let(letExpr, typ))
         )
-        val teardown = ""
         (
-          merge(merge(valueSetup, Some(setup)), bodySetup),
+          s"$valueSetup\n$letSetup\n$bodySetup",
           bodyToC,
-          merge(merge(valueTeardown, bodyTeardown), Some(teardown))
+          s"$valueTeardown\n$bodyTeardown\n$letTeardown"
         )
       case fred.IfExpr(cond, thenBody, elseBody, _) =>
         val (condSetup, condC, condTeardown) = exprToC(cond)
@@ -129,23 +128,23 @@ object Translator {
         val setup = s"""|$condSetup
                         |$typ $resVar;
                         |if ($condC) {
-                        |${indent(1)(thenSetup.getOrElse(""))}
+                        |${indent(1)(thenSetup)}
                         |  $resVar = $thenC;
                         |} else {
-                        |${indent(1)(elseSetup.getOrElse(""))}
+                        |${indent(1)(elseSetup)}
                         |  $resVar = $elseC;
                         |}""".stripMargin
 
-        (merge(condSetup, Some(setup)), resVar, condTeardown)
+        (setup, resVar, condTeardown)
       case FieldAccess(obj, field, _) =>
         val (objSetup, objToC, objTeardown) = exprToC(obj)
         (objSetup, s"$objToC->${field.value}", objTeardown)
       case FnCall(fnName, args, _, _, _) =>
         val (setups, argsToC, teardowns) = args.map(exprToC).unzip3
         (
-          merge(setups*),
+          setups.mkString("\n"),
           s"${fnName.value}(${argsToC.mkString(", ")})",
-          merge(teardowns*)
+          teardowns.mkString("\n")
         )
       case MatchExpr(obj, arms, _) =>
         val (objSetup, objToC, objTeardown) = exprToC(obj)
@@ -154,19 +153,75 @@ object Translator {
         val resType = typer.types(expr)
         val resVar = newVar(expr.hashCode())
 
-        val armsToC = arms.map { case MatchArm(pat, body, _) => ??? }
+        val armsToC = arms.map {
+          case MatchArm(MatchPattern(ctorName, patBindings), body, _) =>
+            val variant = objType.cases.find(_.name.value == ctorName.value).get
+            val (bindingSetups, bindingTeardowns) =
+              patBindings.map { (fieldName, varName) =>
+                addBinding(
+                  varName.value,
+                  s"$objVar->${fieldName.value}",
+                  bindings.types(
+                    variant.fields
+                      .find(_.name.value == fieldName.value)
+                      .get
+                      .typ
+                      .name
+                  )
+                )
+              }.unzip
+            val (bodySetup, bodyToC, bodyTeardown) = exprToC(body)
+            s"""|case ${tagName(variant.name.value)}:
+                |${indent(1)(bindingSetups.mkString("\n"))}
+                |${indent(1)(bodySetup)}
+                |  $resVar = $bodyToC;
+                |${indent(1)(bodyTeardown)}
+                |${indent(1)(bindingTeardowns.mkString("\n"))}
+                |  break;""".stripMargin
+        }
 
-        val setup = s"""|${typeRefToC(objType.name)} $objVar = $objToC;
+        val setup = s"""|$objSetup
+                        |${typeRefToC(objType.name)} $objVar = $objToC;
                         |${typeRefToC(resType.name)} $resVar;
                         |switch ($objVar->$KindField) {
-                        |}""".stripMargin
-        val teardown = s""""""
+                        |${armsToC.mkString("\n")}
+                        |}
+                        |${incrRc(resVar, resType)}
+                        |$objTeardown""".stripMargin
+        val teardown = decrRc(resVar, resType)
 
-        (merge(objSetup, Some(setup)), ???, objTeardown)
+        (setup, resVar, teardown)
     }
   }
 
-  private def incrRc(expr: String) = s"$expr->$RcField ++;"
+  private def addBinding(
+      varName: String,
+      value: String,
+      typ: Type
+  ): (String, String) = {
+    val setup = s"""|${typeRefToC(typ.name)} ${varName} = $value;
+                    |${incrRc(varName, typ)}""".stripMargin
+    val teardown = decrRc(varName, typ)
+    (setup, teardown)
+  }
+
+  private def incrRc(expr: String, typ: Type) = {
+    if (typ.isInstanceOf[TypeDef]) {
+      s"$expr->$RcField ++;"
+    } else {
+      ""
+    }
+  }
+
+  private def decrRc(expr: String, typ: Type) = {
+    if (typ.isInstanceOf[TypeDef]) {
+      s"""|if (--$expr->$RcField == 0) {
+          |  free($expr);
+          |}""".stripMargin
+    } else {
+      ""
+    }
+  }
 
   private def merge(
       setupsOrTeardowns: Option[String]*

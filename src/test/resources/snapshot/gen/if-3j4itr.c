@@ -14,5 +14,7 @@ char* foo (int bar) {
     char* y = "foo";
     var$addc23b2 = y;
   }
-  return var$addc23b2;
+  char* var$4e676948 = var$addc23b2;
+
+  return var$4e676948;
 }
