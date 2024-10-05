@@ -66,4 +66,25 @@ class TyperTests extends munit.FunSuite with SnapshotAssertions {
       Typer.resolveAllTypes(parsed)
     }
   }
+
+  test("Same variable name, separate scopes") {
+    val parsed = Parser.parse("""
+      fn foo(): int =
+        if 0 then
+          let x = 2 in x
+        else
+          let x = "foo" in
+          let y = x in
+          4
+      """)
+    val typer = Typer.resolveAllTypes(parsed)
+    assertFileSnapshot(
+      pprint
+        .apply(typer.types.toList.sortBy { case (expr, _) =>
+          (expr.span.start, expr.span.end, expr.hashCode())
+        })
+        .plainText,
+      "typer/scope-li8ae4.scala"
+    )
+  }
 }

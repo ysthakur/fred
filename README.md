@@ -1,8 +1,36 @@
-## sbt project compiled with Scala 3
+# fred
 
-### Usage
+CMSC499 project
 
-This is a normal sbt project. You can compile code with `sbt compile`, run it with `sbt run`, and `sbt console` will start a Scala 3 REPL.
+## Compiling to C
 
-For more information on the sbt-dotty plugin, see the
-[scala3-example-project](https://github.com/scala/scala3-example-project/blob/main/README.md).
+A type like
+```
+data Foo
+  = Bar {
+      mut foo: Foo,
+      fred: Fred,
+      common: str,
+      notcommon: str
+    }
+  | Baz {
+      blech: str,
+      mut gah: int,
+      common: str,
+      notcommon: int
+    }
+```
+would be compiled to the following:
+```c
+enum Foo_kind { Bar_tag, Baz_tag };
+struct Foo {
+  enum Foo_kind kind;
+  char* common;
+  union {
+    struct { struct Foo* foo_Bar; struct Fred* fred_Bar; char* notcommon_Bar; };
+    struct { char* blech_Baz; int gah_Baz; int notcommon_Baz; };
+  };
+};
+```
+
+Every field has the name of its variant added to it, so that multiple variants can have fields with the same name (e.g. `notcommon`). But fields that have the same type in all variants are put outside the union, e.g., `common`, which has a type of `str` in all variants.

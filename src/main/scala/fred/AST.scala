@@ -74,7 +74,7 @@ enum BinOp(val text: String) {
   case Minus extends BinOp("-")
   case Mul extends BinOp("*")
   case Div extends BinOp("/")
-  case Eq extends BinOp("=")
+  case Eq extends BinOp("==")
   case Lt extends BinOp("<")
   case Lteq extends BinOp("<=")
   case Gt extends BinOp(">")

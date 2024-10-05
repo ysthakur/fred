@@ -107,13 +107,13 @@ object Parser {
         }
     val selectable: P[Expr] = varRefOrFnCall | parenExpr | literal
     val fieldAccess: P[Expr] =
-      ((selectable <* ws) ~ (spannedId <* ws).repSep0(P.char('.') *> ws)).map {
+      ((selectable <* ws) ~ (P.char('.') *> ws *> spannedId <* ws).rep0).map {
         case (obj, fields) =>
           fields.foldLeft(obj) { (obj, field) => FieldAccess(obj, field, None) }
       }
     val binOp1 = binOp(fieldAccess, P.stringIn(List("*", "/")))
     val binOp2 = binOp(binOp1, P.stringIn(List("+", "-")))
-    val binOp3 = binOp(binOp2, P.stringIn(List(">=", "<=", ">", "<", "=")))
+    val binOp3 = binOp(binOp2, P.stringIn(List(">=", "<=", ">", "<", "==")))
 
     val matchPattern: P[MatchPattern] = (
       (spannedId <* ws) ~ inBraces(

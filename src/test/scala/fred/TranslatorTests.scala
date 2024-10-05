@@ -9,12 +9,18 @@ class TranslatorTests extends munit.FunSuite with SnapshotAssertions {
       data Foo
         = Bar {
             mut foo: Foo,
-            fred: Fred
+            fred: Fred,
+            common: str,
+            notcommon: str
           }
         | Baz {
             blech: str,
-            mut gah: int
+            mut gah: int,
+            common: str,
+            notcommon: int
           }
+      
+      fn foo(param: Foo): str = param.common
       """)
     given Typer = Typer.resolveAllTypes(parsed)
     val generated = Translator.toC(parsed)
@@ -45,5 +51,16 @@ class TranslatorTests extends munit.FunSuite with SnapshotAssertions {
     given Typer = Typer.resolveAllTypes(parsed)
     val generated = Translator.toC(parsed)
     assertFileSnapshot(generated.toString, "gen/if-3j4itr.c")
+  }
+
+  test("Function calls") {
+    val parsed = Parser.parse("""
+      fn fact(i: int): int =
+        if i == 0 then 1
+        else i * fact(i - 1)
+      """)
+    given Typer = Typer.resolveAllTypes(parsed)
+    val generated = Translator.toC(parsed)
+    assertFileSnapshot(generated.toString, "gen/fn-call-83jief.c")
   }
 }

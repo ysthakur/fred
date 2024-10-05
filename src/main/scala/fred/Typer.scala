@@ -113,7 +113,6 @@ object Typer {
       types: mutable.Map[Expr, Type]
   )(using file: ParsedFile): Type = {
     expr match {
-      case FieldAccess(obj, field, typ) => ???
       case IntLiteral(_, _) =>
         types.put(expr, BuiltinType.Int)
         BuiltinType.Int
@@ -122,6 +121,24 @@ object Typer {
         BuiltinType.Str
       case varRef @ VarRef(_, _, _) =>
         val typ = bindings.getVar(varRef).typ
+        types.put(expr, typ)
+        typ
+      case FieldAccess(obj, field, typ) =>
+        val objType = resolveExprType(obj, bindings, types) match {
+          case BuiltinType.Str =>
+            throw new CompileError("Strings don't have fields", obj.span)
+          case BuiltinType.Int =>
+            throw new CompileError("Ints don't have fields", obj.span)
+          case td: TypeDef => td
+        }
+        if (!objType.hasCommonField(field.value)) {
+          throw new CompileError(
+            s"${field.value} isn't a common field in ${objType.name}",
+            field.span
+          )
+        }
+        val fieldTypeRef = objType.cases.head.fields.find(_.name.value == field.value).get.typ
+        val typ = bindings.getType(fieldTypeRef)
         types.put(expr, typ)
         typ
       case FnCall(Spanned(name, nameSpan), args, _, _, span) =>

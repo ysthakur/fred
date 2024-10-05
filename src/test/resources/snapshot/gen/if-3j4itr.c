@@ -3,15 +3,16 @@ char* foo (int bar) {
   
   int g = 3;
   
-  int var$629532f1;
-  if (8) {
+  
+  char* var$addc23b2;
+  if (g) {
     
     int y = 5;
-    var$629532f1 = "foo";
+    var$addc23b2 = "foo";
   } else {
     
     char* y = "foo";
-    var$629532f1 = y;
+    var$addc23b2 = y;
   }
-  return var$629532f1;
+  return var$addc23b2;
 }
