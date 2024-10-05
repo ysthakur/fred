@@ -1,5 +1,5 @@
 
-char* foo (int bar) {
+char* fn$foo (int bar) {
   
   int g = 3;
   

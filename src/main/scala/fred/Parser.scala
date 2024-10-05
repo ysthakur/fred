@@ -89,14 +89,20 @@ object Parser {
         .withContext("str literal")
     val literal = intLiteral | stringLiteral
     val parenExpr = inParens(expr).withContext("paren expr")
-    val varRefOrFnCall =
-      (P.index.with1 ~ id ~ inParens(
-        expr.repSep0(P.char(',') *> ws)
-      ).? ~ P.index)
+    val varRefOrFnCallOrCtorCall =
+      (P.index.with1 ~ (id <* ws)
+        ~ inParens(expr.repSep0(P.char(',') *> ws))
+          .eitherOr(
+            inBraces(
+              ((spannedId <* ws <* P.char(':') <* ws) ~ expr)
+                .repSep0(P.char(',') *> ws)
+            )
+          )
+          .? ~ P.index)
         .map {
           case (start -> name -> None -> end) =>
-            VarRef(name, None, Span(start, end))
-          case (start -> name -> Some(args) -> end) =>
+            VarRef(name, None, Span(start, start + name.length))
+          case (start -> name -> Some(Right(args)) -> end) =>
             FnCall(
               Spanned(name, Span(start, start + name.length)),
               args,
@@ -104,8 +110,14 @@ object Parser {
               None,
               Span(start, end)
             )
+          case (start -> name -> Some(Left(values)) -> end) =>
+            CtorCall(
+              Spanned(name, Span(start, start + name.length)),
+              values,
+              Span(start, end)
+            )
         }
-    val selectable: P[Expr] = varRefOrFnCall | parenExpr | literal
+    val selectable: P[Expr] = varRefOrFnCallOrCtorCall | parenExpr | literal
     val fieldAccess: P[Expr] =
       ((selectable <* ws) ~ (P.char('.') *> ws *> spannedId <* ws).rep0).map {
         case (obj, fields) =>

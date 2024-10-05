@@ -1,9 +1,9 @@
 
-int foo (int bar) {
+int fn$foo (int bar) {
   
   
   bar;
-  int var$ddb2e4f9 = 3;
+  int var$60ed0d42 = 3;
 
-  return var$ddb2e4f9;
+  return var$60ed0d42;
 }

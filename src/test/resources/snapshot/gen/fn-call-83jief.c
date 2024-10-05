@@ -1,16 +1,16 @@
 
-int fact (int i) {
+int fn$fact (int i) {
   
   
-  int var$4b7137b;
+  int var$443348f9;
   if (i == 0) {
     
-    var$4b7137b = 1;
+    var$443348f9 = 1;
   } else {
   
-    var$4b7137b = i * fact(i - 1);
+    var$443348f9 = i * fn$fact(i - 1);
   }
-  int var$a7751c99 = var$4b7137b;
+  int var$34bb9ab4 = var$443348f9;
 
-  return var$a7751c99;
+  return var$34bb9ab4;
 }

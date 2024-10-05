@@ -63,13 +63,14 @@ object Translator {
   }
 
   private def fnToC(fn: FnDef)(using Bindings, Typer) = {
+    // todo increment refcount for parameters
     val params = fn.params
       .map(param => s"${typeRefToC(param.typ.name)} ${param.name.value}")
       .mkString(", ")
     val (bodySetup, body, bodyTeardown) = exprToC(fn.body)
     val typeToC = typeRefToC(fn.returnType.name)
     val resVar = newVar(fn.hashCode())
-    s"""|$typeToC ${fn.name.value} ($params) {
+    s"""|$typeToC ${mangleFnName(fn.name.value)}($params) {
         |${indent(1)(bodySetup)}
         |  $typeToC $resVar = $body;
         |${indent(1)(bodyTeardown)}
@@ -105,7 +106,7 @@ object Translator {
         } else {
           (setup, s"$lhsTranslated ${op.value.text} $rhsTranslated", teardown)
         }
-      case letExpr @ fred.LetExpr(name, value, body, _) =>
+      case letExpr @ LetExpr(name, value, body, _) =>
         val (valueSetup, valueToC, valueTeardown) = exprToC(value)
         val typ = typer.types(value)
         val (letSetup, letTeardown) = addBinding(name.value, valueToC, typ)
@@ -117,7 +118,7 @@ object Translator {
           bodyToC,
           s"$valueTeardown\n$bodyTeardown\n$letTeardown"
         )
-      case fred.IfExpr(cond, thenBody, elseBody, _) =>
+      case IfExpr(cond, thenBody, elseBody, _) =>
         val (condSetup, condC, condTeardown) = exprToC(cond)
         val (thenSetup, thenC, thenTeardown) = exprToC(thenBody)
         val (elseSetup, elseC, elseTeardown) = exprToC(elseBody)
@@ -143,9 +144,33 @@ object Translator {
         val (setups, argsToC, teardowns) = args.map(exprToC).unzip3
         (
           setups.mkString("\n"),
-          s"${fnName.value}(${argsToC.mkString(", ")})",
+          s"${mangleFnName(fnName.value)}(${argsToC.mkString(", ")})",
           teardowns.mkString("\n")
         )
+      case CtorCall(ctorName, values, span) =>
+        val (typ, variant) = bindings.ctors(ctorName.value)
+        val resVar = newVar(expr.hashCode())
+        val valueSetups = values
+          .map { case (fieldName, value) =>
+            val fieldType = bindings.types(
+              variant.fields.find(_.name.value == fieldName.value).get.typ.name
+            )
+            val (valueSetup, valueToC, valueTeardown) = exprToC(value)
+            val mangledName =
+              if (typ.hasCommonField(fieldName.value)) fieldName.value
+              else mangledFieldName(variant, fieldName.value)
+            val fieldAccess = s"$resVar->$mangledName"
+            s"""|$valueSetup
+                |$fieldAccess = $valueToC;
+                |${incrRc(fieldAccess, fieldType)}
+                |$valueTeardown""".stripMargin
+          }
+          .mkString("\n")
+        val setup =
+          s"""|${typeRefToC(typ.name)} $resVar = malloc(sizeof (struct ${typ.name}));
+              |$resVar->$KindField = ${tagName(ctorName.value)};
+              |$valueSetups""".stripMargin
+        (setup, resVar, "")
       case MatchExpr(obj, arms, _) =>
         val (objSetup, objToC, objTeardown) = exprToC(obj)
         val objType = typer.types(obj).asInstanceOf[TypeDef]
@@ -158,9 +183,12 @@ object Translator {
             val variant = objType.cases.find(_.name.value == ctorName.value).get
             val (bindingSetups, bindingTeardowns) =
               patBindings.map { (fieldName, varName) =>
+                val mangledName =
+                  if (objType.hasCommonField(fieldName.value)) fieldName.value
+                  else mangledFieldName(variant, fieldName.value)
                 addBinding(
                   varName.value,
-                  s"$objVar->${fieldName.value}",
+                  s"$objVar->$mangledName",
                   bindings.types(
                     variant.fields
                       .find(_.name.value == fieldName.value)
@@ -248,6 +276,9 @@ object Translator {
       case name  => s"struct $name*"
     }
   }
+
+  private def mangleFnName(fnName: String) =
+    if (fnName != "main") "fn$" + fnName else "main"
 
   /** Field names need to be mangled so that multiple cases can have fields with
     * the same name

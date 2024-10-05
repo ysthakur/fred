@@ -63,4 +63,31 @@ class TranslatorTests extends munit.FunSuite with SnapshotAssertions {
     val generated = Translator.toC(parsed)
     assertFileSnapshot(generated.toString, "gen/fn-call-83jief.c")
   }
+
+  test("Complex test") {
+    val parsed = Parser.parse("""
+      data Foo
+        = Bar {
+            x: int,
+            y: int
+          }
+        | Baz {
+            a: str,
+            b: int
+          }
+      
+      fn foo(foo: Foo): int =
+        foo match {
+          Bar { x: x, y: yyy } => x + yyy,
+          Baz { a: astr, b: b } => b
+        }
+      
+      fn main(): int =
+        let foo = Bar { x: 1, y: 2 } in
+        foo(foo)
+      """)
+    given Typer = Typer.resolveAllTypes(parsed)
+    val generated = Translator.toC(parsed)
+    assertFileSnapshot(generated.toString, "gen/complex-liudr567.c")
+  }
 }

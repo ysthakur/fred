@@ -69,6 +69,14 @@ case class FnCall(
     span: Span
 ) extends Expr
 
+case class CtorCall(
+    ctorName: Spanned[String],
+    values: List[(Spanned[String], Expr)],
+    span: Span
+) extends Expr {
+  def typ = None
+}
+
 enum BinOp(val text: String) {
   case Plus extends BinOp("+")
   case Minus extends BinOp("-")

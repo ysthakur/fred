@@ -137,7 +137,8 @@ object Typer {
             field.span
           )
         }
-        val fieldTypeRef = objType.cases.head.fields.find(_.name.value == field.value).get.typ
+        val fieldTypeRef =
+          objType.cases.head.fields.find(_.name.value == field.value).get.typ
         val typ = bindings.getType(fieldTypeRef)
         types.put(expr, typ)
         typ
@@ -156,6 +157,21 @@ object Typer {
               nameSpan
             )
         }
+      case CtorCall(ctorName, values, span) =>
+        val (typ, variant) = bindings.ctors(ctorName.value)
+        for ((fieldName, value) <- values) {
+          val field = variant.fields.find(_.name.value == fieldName.value).get
+          val gotType = resolveExprType(value, bindings, types)
+          val expectedType = bindings.getType(field.typ)
+          if (expectedType != gotType) {
+            throw new CompileError(
+              s"Expected ${expectedType.name}, got ${gotType.name}",
+              span
+            )
+          }
+        }
+        types.put(expr, typ)
+        typ
       case BinExpr(lhs, op, rhs, typ) =>
         op.value match {
           case BinOp.Plus | BinOp.Minus | BinOp.Mul | BinOp.Div | BinOp.Eq |
