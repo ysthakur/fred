@@ -1,20 +1,20 @@
 
-char* fn$foo (int bar) {
+char* fn$foo(int bar) {
   
   int g = 3;
   
   
-  char* var$addc23b2;
+  char* ifres$0;
   if (g) {
     
     int y = 5;
-    var$addc23b2 = "foo";
+    ifres$0 = "foo";
   } else {
     
     char* y = "foo";
-    var$addc23b2 = y;
+    ifres$0 = y;
   }
-  char* var$4e676948 = var$addc23b2;
+  char* fnres$1 = ifres$0;
 
-  return var$4e676948;
+  return fnres$1;
 }

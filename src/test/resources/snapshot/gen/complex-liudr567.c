@@ -8,52 +8,52 @@ struct Foo {
     struct { char* a_Baz; int b_Baz; };
   };
 };
-int fn$foo (struct Foo* foo) {
+int fn$foo(struct Foo* foo) {
   
-  struct Foo* var$43069336 = foo;
-  int var$5ef20a99;
-  switch (var$43069336->kind) {
+  struct Foo* matchobjres$0 = foo;
+  int matchresres$1;
+  switch (matchobjres$0->kind) {
   case Bar_tag:
-    int x = var$43069336->x_Bar;
+    int x = matchobjres$0->x_Bar;
     
-    int yyy = var$43069336->y_Bar;
+    int yyy = matchobjres$0->y_Bar;
   
-    var$5ef20a99 = x + yyy;
+    matchresres$1 = x + yyy;
   
   
     break;
   case Baz_tag:
-    char* astr = var$43069336->a_Baz;
+    char* astr = matchobjres$0->a_Baz;
     
-    int b = var$43069336->b_Baz;
+    int b = matchobjres$0->b_Baz;
     
-    var$5ef20a99 = b;
+    matchresres$1 = b;
     
   
     break;
   }
-  int var$915130db = var$5ef20a99;
+  int fnres$2 = matchresres$1;
   
-  return var$915130db;
+  return fnres$2;
 }
-int main () {
-  struct Foo* var$9a014472 = malloc(sizeof (struct Foo));
-  var$9a014472->kind = Bar_tag;
+int main() {
+  struct Foo* ctorres$3 = malloc(sizeof (struct Foo));
+  ctorres$3->kind = Bar_tag;
   
-  var$9a014472->x_Bar = 1;
-  
-  
-  
-  var$9a014472->y_Bar = 2;
+  ctorres$3->x_Bar = 1;
   
   
-  struct Foo* foo = var$9a014472;
+  
+  ctorres$3->y_Bar = 2;
+  
+  
+  struct Foo* foo = ctorres$3;
   foo->rc ++;
-  int var$3c4e873c = fn$foo(foo);
+  int fnres$4 = fn$foo(foo);
   
   
   if (--foo->rc == 0) {
     free(foo);
   }
-  return var$3c4e873c;
+  return fnres$4;
 }

@@ -21,6 +21,10 @@ object Translator {
       */
     val mangledFieldsFor = mutable.Map.empty[TypeDef, Map[String, String]]
 
+    val mangledVars = mutable.Map.empty[VarDef, String]
+
+    private var resVarCounter = 0
+
     def translateType(typ: TypeDef): String = {
       val name = typ.name
       val tagNames =
@@ -84,14 +88,17 @@ object Translator {
       s"struct { $fields };"
     }
 
-    def fnToC(fn: FnDef)(using Bindings) = {
+    def fnToC(fn: FnDef)(using bindings: Bindings) = {
       // todo increment refcount for parameters
+
+      // param names don't need to be mangled because they're the first occurrence
       val params = fn.params
         .map(param => s"${typeRefToC(param.typ.name)} ${param.name.value}")
         .mkString(", ")
-      val (bodySetup, body, bodyTeardown) = exprToC(fn.body)
+      val (bodySetup, body, bodyTeardown) =
+        exprToC(fn.body)(using bindings.enterFn(fn))
       val typeToC = typeRefToC(fn.returnType.name)
-      val resVar = newVar(fn.hashCode())
+      val resVar = s"fn${newVar()}"
       s"""|$typeToC ${mangleFnName(fn.name.value)}($params) {
           |${indent(1)(bodySetup)}
           |  $typeToC $resVar = $body;
@@ -114,7 +121,8 @@ object Translator {
         case IntLiteral(value, _) => ("", value.toString, "")
         case StringLiteral(value, _) =>
           ("", s"\"${value.replace("\"", "\\\"")}\"", "")
-        case VarRef(name, _, _) => ("", name, "")
+        case VarRef(name, _, _) =>
+          ("", mangledVars.getOrElse(bindings.vars(name), name), "")
         case BinExpr(lhs, op, rhs, typ) =>
           val (lhsSetup, lhsTranslated, lhsTeardown) = exprToC(lhs)
           val (rhsSetup, rhsTranslated, rhsTeardown) = exprToC(rhs)
@@ -128,10 +136,21 @@ object Translator {
         case letExpr @ LetExpr(name, value, body, _) =>
           val (valueSetup, valueToC, valueTeardown) = exprToC(value)
           val typ = typer.types(value)
-          val (letSetup, letTeardown) = addBinding(name.value, valueToC, typ)
-          val (bodySetup, bodyToC, bodyTeardown) = exprToC(body)(using
+          val shouldMangle = bindings.vars.contains(name.value)
+          val newBindings =
             bindings.withVar(name.value, VarDef.Let(letExpr, typ))
-          )
+          val mangledName =
+            if (shouldMangle) newMangledVar(name.value) else name.value
+          if (shouldMangle) {
+            mangledVars.put(
+              bindings.vars(name.value),
+              newMangledVar(name.value)
+            )
+          }
+          val (letSetup, letTeardown) = addBinding(mangledName, valueToC, typ)
+          val (bodySetup, bodyToC, bodyTeardown) =
+            exprToC(body)(using newBindings)
+
           (
             s"$valueSetup\n$letSetup\n$bodySetup",
             bodyToC,
@@ -143,7 +162,7 @@ object Translator {
           val (elseSetup, elseC, elseTeardown) = exprToC(elseBody)
 
           val typ = typeRefToC(typer.types(expr).name)
-          val resVar = newVar(expr.hashCode())
+          val resVar = s"if${newVar()}"
 
           val setup = s"""|$condSetup
                           |$typ $resVar;
@@ -168,7 +187,7 @@ object Translator {
           )
         case CtorCall(ctorName, values, span) =>
           val (typ, variant) = bindings.ctors(ctorName.value)
-          val resVar = newVar(expr.hashCode())
+          val resVar = s"ctor${newVar()}"
           val valueSetups = values
             .map { case (fieldName, value) =>
               val fieldType = bindings.types(
@@ -194,26 +213,39 @@ object Translator {
                 |$resVar->$KindField = ${tagName(ctorName.value)};
                 |$valueSetups""".stripMargin
           (setup, resVar, "")
-        case MatchExpr(obj, arms, _) =>
+        case matchExpr @ MatchExpr(obj, arms, _) =>
           val (objSetup, objToC, objTeardown) = exprToC(obj)
           val objType = typer.types(obj).asInstanceOf[TypeDef]
-          val objVar = newVar(obj.hashCode())
+          val objVar = s"matchobj${newVar()}"
           val resType = typer.types(expr)
-          val resVar = newVar(expr.hashCode())
+          val resVar = s"matchres${newVar()}"
 
           val armsToC = arms.map {
-            case MatchArm(MatchPattern(ctorName, patBindings), body, _) =>
+            case MatchArm(pat @ MatchPattern(ctorName, patBindings), body, _) =>
               val variant =
                 objType.cases.find(_.name.value == ctorName.value).get
+              val oldBindings = bindings
+              given newBindings: Bindings =
+                oldBindings.enterPattern(matchExpr, pat, objType)
               val (bindingSetups, bindingTeardowns) =
                 patBindings.map { (fieldName, varName) =>
-                  val mangledName =
+                  val mangledFieldName =
                     if (objType.hasCommonField(fieldName.value)) fieldName.value
-                    else mangledFieldName(variant, fieldName.value)
+                    else this.mangledFieldName(variant, fieldName.value)
+                  val shouldMangle = oldBindings.vars.contains(varName.value)
+                  val mangledVarName =
+                    if (shouldMangle) newMangledVar(varName.value)
+                    else varName.value
+                  if (shouldMangle) {
+                    mangledVars.put(
+                      newBindings.vars(varName.value),
+                      mangledVarName
+                    )
+                  }
                   addBinding(
-                    varName.value,
-                    s"$objVar->$mangledName",
-                    bindings.types(
+                    mangledVarName,
+                    s"$objVar->$mangledFieldName",
+                    newBindings.types(
                       variant.fields
                         .find(_.name.value == fieldName.value)
                         .get
@@ -222,7 +254,8 @@ object Translator {
                     )
                   )
                 }.unzip
-              val (bodySetup, bodyToC, bodyTeardown) = exprToC(body)
+              val (bodySetup, bodyToC, bodyTeardown) =
+                exprToC(body)(using newBindings)
               s"""|case ${tagName(variant.name.value)}:
                   |${indent(1)(bindingSetups.mkString("\n"))}
                   |${indent(1)(bodySetup)}
@@ -244,6 +277,10 @@ object Translator {
 
           (setup, resVar, teardown)
       }
+    }
+
+    private def newMangledVar(baseName: String): String = {
+      baseName + "$" + mangledVars.keySet.filter(_.name == baseName).size
     }
 
     private def addBinding(
@@ -289,8 +326,10 @@ object Translator {
     /** Create a variable name that hopefully won't conflict with any other
       * variables
       */
-    private def newVar(seed: Int): String = {
-      "var$" + seed.toHexString // Random().alphanumeric.take(5).mkString
+    private def newVar(): String = {
+      val res = "res$" + resVarCounter
+      resVarCounter += 1
+      res
     }
 
     private def typeRefToC(typeName: String) = {

@@ -1,16 +1,16 @@
 
-int fn$fact (int i) {
+int fn$fact(int i) {
   
   
-  int var$443348f9;
+  int ifres$0;
   if (i == 0) {
     
-    var$443348f9 = 1;
+    ifres$0 = 1;
   } else {
   
-    var$443348f9 = i * fn$fact(i - 1);
+    ifres$0 = i * fn$fact(i - 1);
   }
-  int var$34bb9ab4 = var$443348f9;
+  int fnres$1 = ifres$0;
 
-  return var$34bb9ab4;
+  return fnres$1;
 }

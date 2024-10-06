@@ -45,7 +45,7 @@ case class Bindings(
         }
       newVars.put(
         varName.value,
-        VarDef.Pat(matchExpr, pat, fieldName.value, typ)
+        VarDef.Pat(matchExpr, pat, fieldName.value, varName.value, typ)
       )
     }
 

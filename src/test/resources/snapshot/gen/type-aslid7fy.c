@@ -8,9 +8,9 @@ struct Foo {
     struct { char* blech_Baz; int gah_Baz; int notcommon_Baz; };
   };
 };
-char* fn$foo (struct Foo* param) {
+char* fn$foo(struct Foo* param) {
   
-  char* var$5862a823 = param->common;
+  char* fnres$0 = param->common;
   
-  return var$5862a823;
+  return fnres$0;
 }

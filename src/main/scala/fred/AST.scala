@@ -117,8 +117,17 @@ enum VarDef {
     *   The specific pattern inside which the binding is
     * @param field
     *   The original name of the field inside that constructor
+    * @param varName
+    *   The name of the variable that the field's value is being bound to
     */
-  case Pat(matchExpr: MatchExpr, pat: MatchPattern, field: String, typ: Type)
+  case Pat(matchExpr: MatchExpr, pat: MatchPattern, field: String, varName: String, typ: Type)
 
   def typ: Type
+
+  def name: String =
+    this match {
+      case Let(expr, _) => expr.name.value
+      case VarDef.Param(param, _) => param.name.value
+      case Pat(_, _, _, varName, _) => varName
+    }
 }
