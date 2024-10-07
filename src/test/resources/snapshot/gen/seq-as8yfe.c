@@ -1,6 +1,5 @@
-
 int fn$foo(int bar) {
   bar;
-  int fnres$0 = 3;
-  return fnres$0;
+  int ret$0 = 3;
+  return ret$0;
 }

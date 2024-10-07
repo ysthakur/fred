@@ -8,22 +8,24 @@ struct Foo {
   };
 };
 int fn$foo(struct Foo* foo) {
-  struct Foo* matchobjres$0 = foo;
-  int matchresres$1;
-  switch (matchobjres$0->kind) {
+  foo->rc ++;
+  struct Foo* matchobj$0 = foo;
+  int matchres$1;
+  switch (matchobj$0->kind) {
   case Bar_tag:
-    int x = matchobjres$0->x_Bar;
-    int yyy = matchobjres$0->y_Bar;
-    matchresres$1 = x + yyy;
+    int x = matchobj$0->x_Bar;
+    int yyy = matchobj$0->y_Bar;
+    matchres$1 = x + yyy;
     break;
   case Baz_tag:
-    char* astr = matchobjres$0->a_Baz;
-    int b = matchobjres$0->b_Baz;
-    matchresres$1 = b;
+    char* astr = matchobj$0->a_Baz;
+    int b = matchobj$0->b_Baz;
+    matchres$1 = b;
     break;
   }
-  int fnres$2 = matchresres$1;
-  return fnres$2;
+  int ret$2 = matchres$1;
+  if (--foo->rc == 0) free(foo);
+  return ret$2;
 }
 int main() {
   struct Foo* ctorres$3 = malloc(sizeof (struct Foo));
@@ -32,9 +34,7 @@ int main() {
   ctorres$3->y_Bar = 2;
   struct Foo* foo = ctorres$3;
   foo->rc ++;
-  int fnres$4 = fn$foo(foo);
-  if (--foo->rc == 0) {
-    free(foo);
-  }
-  return fnres$4;
+  int ret$4 = fn$foo(foo);
+  if (--foo->rc == 0) free(foo);
+  return ret$4;
 }

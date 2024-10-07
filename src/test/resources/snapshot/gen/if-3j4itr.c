@@ -1,4 +1,3 @@
-
 char* fn$foo(int bar) {
   int g = 3;
   char* ifres$0;
@@ -9,6 +8,6 @@ char* fn$foo(int bar) {
     char* y = "foo";
     ifres$0 = y;
   }
-  char* fnres$1 = ifres$0;
-  return fnres$1;
+  char* ret$1 = ifres$0;
+  return ret$1;
 }

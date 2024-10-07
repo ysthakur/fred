@@ -14,7 +14,7 @@ object Translator {
       file.typeDefs.map(helper.translateType).mkString("\n") + "\n" + file.fns
         .map(helper.fnToC)
         .mkString("\n")
-    generated.replaceAll(raw"\n\s*\n", "\n")
+    generated.replaceAll(raw"\n(\s|\n)*\n", "\n").strip() + "\n"
   }
 
   private class Helper(typer: Typer) {
@@ -97,14 +97,22 @@ object Translator {
       val params = fn.params
         .map(param => s"${typeRefToC(param.typ.name)} ${param.name.value}")
         .mkString(", ")
+      val paramsSetup = fn.params
+        .map(param => incrRc(param.name.value, bindings.getType(param.typ)))
+        .mkString("\n")
+      val paramsTeardown = fn.params
+        .map(param => decrRc(param.name.value, bindings.getType(param.typ)))
+        .mkString("\n")
       val (bodySetup, body, bodyTeardown) =
         exprToC(fn.body)(using bindings.enterFn(fn))
       val typeToC = typeRefToC(fn.returnType.name)
-      val resVar = s"fn${newVar()}"
+      val resVar = newVar("ret")
       s"""|$typeToC ${mangleFnName(fn.name.value)}($params) {
+          |${indent(1)(paramsSetup)}
           |${indent(1)(bodySetup)}
           |  $typeToC $resVar = $body;
           |${indent(1)(bodyTeardown)}
+          |${indent(1)(paramsTeardown)}
           |  return $resVar;
           |}""".stripMargin
     }
@@ -164,7 +172,7 @@ object Translator {
           val (elseSetup, elseC, elseTeardown) = exprToC(elseBody)
 
           val typ = typeRefToC(typer.types(expr).name)
-          val resVar = s"if${newVar()}"
+          val resVar = newVar("ifres")
 
           val setup = s"""|$condSetup
                           |$typ $resVar;
@@ -189,7 +197,7 @@ object Translator {
           )
         case CtorCall(ctorName, values, span) =>
           val (typ, variant) = bindings.ctors(ctorName.value)
-          val resVar = s"ctor${newVar()}"
+          val resVar = newVar("ctorres")
           val valueSetups = values
             .map { case (fieldName, value) =>
               val fieldType = bindings.types(
@@ -218,9 +226,9 @@ object Translator {
         case matchExpr @ MatchExpr(obj, arms, _) =>
           val (objSetup, objToC, objTeardown) = exprToC(obj)
           val objType = typer.types(obj).asInstanceOf[TypeDef]
-          val objVar = s"matchobj${newVar()}"
+          val objVar = newVar("matchobj")
           val resType = typer.types(expr)
-          val resVar = s"matchres${newVar()}"
+          val resVar = newVar("matchres")
 
           val armsToC = arms.map {
             case MatchArm(pat @ MatchPattern(ctorName, patBindings), body, _) =>
@@ -306,9 +314,7 @@ object Translator {
 
     private def decrRc(expr: String, typ: Type) = {
       if (typ.isInstanceOf[TypeDef]) {
-        s"""|if (--$expr->$RcField == 0) {
-            |  free($expr);
-            |}""".stripMargin
+        s"if (--$expr->$RcField == 0) free($expr);"
       } else {
         ""
       }
@@ -328,8 +334,8 @@ object Translator {
     /** Create a variable name that hopefully won't conflict with any other
       * variables
       */
-    private def newVar(): String = {
-      val res = "res$" + resVarCounter
+    private def newVar(prefix: String): String = {
+      val res = prefix + "$" + resVarCounter
       resVarCounter += 1
       res
     }

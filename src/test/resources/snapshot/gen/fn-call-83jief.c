@@ -1,4 +1,3 @@
-
 int fn$fact(int i) {
   int ifres$0;
   if (i == 0) {
@@ -6,6 +5,6 @@ int fn$fact(int i) {
   } else {
     ifres$0 = i * fn$fact(i - 1);
   }
-  int fnres$1 = ifres$0;
-  return fnres$1;
+  int ret$1 = ifres$0;
+  return ret$1;
 }
