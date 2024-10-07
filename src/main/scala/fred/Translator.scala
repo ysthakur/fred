@@ -10,9 +10,11 @@ object Translator {
   def toC(file: ParsedFile)(using typer: Typer): String = {
     given Bindings = Bindings.fromFile(file)
     val helper = Helper(typer)
-    file.typeDefs.map(helper.translateType).mkString("\n") + "\n" + file.fns
-      .map(helper.fnToC)
-      .mkString("\n")
+    val generated =
+      file.typeDefs.map(helper.translateType).mkString("\n") + "\n" + file.fns
+        .map(helper.fnToC)
+        .mkString("\n")
+    generated.replaceAll(raw"\n\s*\n", "\n")
   }
 
   private class Helper(typer: Typer) {

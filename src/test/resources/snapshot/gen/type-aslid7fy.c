@@ -9,8 +9,6 @@ struct Foo {
   };
 };
 char* fn$foo(struct Foo* param) {
-  
   char* fnres$0 = param->common;
-  
   return fnres$0;
 }
