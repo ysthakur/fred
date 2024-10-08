@@ -152,10 +152,15 @@ object Typer {
             types.put(expr, typ)
             typ
           case None =>
-            throw new CompileError(
-              s"No such function: $name",
-              nameSpan
-            )
+            if (name == "printf") {
+              types.put(expr, BuiltinType.Int)
+              BuiltinType.Int
+            } else {
+              throw new CompileError(
+                s"No such function: $name",
+                nameSpan
+              )
+            }
         }
       case CtorCall(ctorName, values, span) =>
         val (typ, variant) = bindings.ctors(ctorName.value)

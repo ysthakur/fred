@@ -7,8 +7,11 @@ object Translator {
   private val KindField = "kind"
   private val RcField = "rc"
 
-  private val CommonHeader = """|#include <stdlib.h>
-                                |""".stripMargin
+  private val CommonIncludes = """|#include <stdlib.h>
+                                  |#include <stdio.h>
+                                  |""".stripMargin
+
+  private val NoMangleFns = Set("main", "printf")
 
   def toC(file: ParsedFile)(using typer: Typer): String = {
     given Bindings = Bindings.fromFile(file)
@@ -17,7 +20,9 @@ object Translator {
       file.typeDefs.map(helper.translateType).mkString("\n") + "\n" + file.fns
         .map(helper.fnToC)
         .mkString("\n")
-    CommonHeader + generated.replaceAll(raw"\n(\s|\n)*\n", "\n").strip() + "\n"
+    CommonIncludes + generated
+      .replaceAll(raw"\n(\s|\n)*\n", "\n")
+      .strip() + "\n"
   }
 
   private class Helper(typer: Typer) {
@@ -352,7 +357,7 @@ object Translator {
     }
 
     private def mangleFnName(fnName: String) =
-      if (fnName != "main") "fn$" + fnName else "main"
+      if (NoMangleFns.contains(fnName)) fnName else "fn$" + fnName
 
     /** Field names need to be mangled so that multiple cases can have fields
       * with the same name

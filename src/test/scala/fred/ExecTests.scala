@@ -25,10 +25,11 @@ class ExecTests extends munit.FunSuite with SnapshotAssertions {
         }
 
       fn main(): int =
-        let list = Cons { value: 1, next: Cons { value: 2, next: Cons { value: 4, next: Nil { } } } } in
-        sum(list)
+        let list = Cons { value: 1, next: Cons { value: 2, next: Cons { value: 3, next: Nil { } } } } in
+        printf("%d\n", sum(list));
+        0
       """
     val compiled = Compiler.compile(code, Paths.get("foo.c"), "a.out")
-    assertEquals(6, "./a.out".!)
+    assertNoDiff("6", "./a.out".!!)
   }
 }
