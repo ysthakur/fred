@@ -1,3 +1,4 @@
+#include <stdlib.h>
 char* fn$foo(int bar) {
   int g = 3;
   char* ifres$0;

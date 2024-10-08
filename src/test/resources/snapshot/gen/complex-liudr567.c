@@ -1,3 +1,4 @@
+#include <stdlib.h>
 enum Foo_kind { Bar_tag, Baz_tag };
 struct Foo {
   int rc;

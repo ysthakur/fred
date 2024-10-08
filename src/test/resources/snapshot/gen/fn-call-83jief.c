@@ -1,3 +1,4 @@
+#include <stdlib.h>
 int fn$fact(int i) {
   int ifres$0;
   if (i == 0) {

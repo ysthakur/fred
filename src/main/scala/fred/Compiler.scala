@@ -1,7 +1,11 @@
 package fred
 
+import scala.sys.process.*
+import java.nio.file.Files
+import java.nio.file.Path
+
 object Compiler {
-  def compile(code: String): String = {
+  def compile(code: String, outC: Path, outExe: String): Unit = {
     val parsedFile = Parser.parse(code)
     given typer: Typer =
       try {
@@ -13,6 +17,8 @@ object Compiler {
           System.exit(1)
           throw new AssertionError("Shouldn't get here")
       }
-    Translator.toC(parsedFile)
+    val generatedC = Translator.toC(parsedFile)
+    Files.write(outC, generatedC.getBytes())
+    println(s"gcc ${outC.toAbsolutePath()}".!!)
   }
 }

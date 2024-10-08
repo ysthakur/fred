@@ -7,6 +7,9 @@ object Translator {
   private val KindField = "kind"
   private val RcField = "rc"
 
+  private val CommonHeader = """|#include <stdlib.h>
+                                |""".stripMargin
+
   def toC(file: ParsedFile)(using typer: Typer): String = {
     given Bindings = Bindings.fromFile(file)
     val helper = Helper(typer)
@@ -14,7 +17,7 @@ object Translator {
       file.typeDefs.map(helper.translateType).mkString("\n") + "\n" + file.fns
         .map(helper.fnToC)
         .mkString("\n")
-    generated.replaceAll(raw"\n(\s|\n)*\n", "\n").strip() + "\n"
+    CommonHeader + generated.replaceAll(raw"\n(\s|\n)*\n", "\n").strip() + "\n"
   }
 
   private class Helper(typer: Typer) {
