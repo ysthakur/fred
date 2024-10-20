@@ -241,6 +241,7 @@ object Translator {
             .mkString("\n")
           val setup =
             s"""|${typeRefToC(typ.name)} $resVar = malloc(sizeof (struct ${typ.name}));
+                |$resVar->$RcField = 0;
                 |$resVar->$KindField = ${tagName(ctorName.value)};
                 |$valueSetups""".stripMargin
           (setup, resVar, "")

@@ -56,6 +56,7 @@ int fn$foo(struct Foo* foo) {
 }
 int main() {
   struct Foo* ctorres$3 = malloc(sizeof (struct Foo));
+  ctorres$3->rc = 0;
   ctorres$3->kind = Bar_tag;
   ctorres$3->x_Bar = 1;
   ctorres$3->y_Bar = 2;
