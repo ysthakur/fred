@@ -9,7 +9,6 @@ class TranslatorTests extends munit.FunSuite with SnapshotAssertions {
       data Foo
         = Bar {
             mut foo: Foo,
-            fred: Fred,
             common: str,
             notcommon: str
           }

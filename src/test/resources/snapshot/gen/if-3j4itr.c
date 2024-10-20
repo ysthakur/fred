@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+char* fn$foo(int bar);
 char* fn$foo(int bar) {
   int g = 3;
   char* ifres$0;

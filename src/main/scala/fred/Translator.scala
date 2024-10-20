@@ -16,10 +16,17 @@ object Translator {
   def toC(file: ParsedFile)(using typer: Typer): String = {
     given Bindings = Bindings.fromFile(file)
     val helper = Helper(typer)
+    val (delDecls, delImpls) = file.typeDefs.map(helper.deleter).unzip
+    val (decrDecls, decrImpls) = file.typeDefs.map(helper.decrementer).unzip
+    val (fnDecls, fnImpls) = file.fns.map(helper.fnToC).unzip
     val generated =
-      file.typeDefs.map(helper.translateType).mkString("\n") + "\n" + file.fns
-        .map(helper.fnToC)
-        .mkString("\n")
+      file.typeDefs.map(helper.translateType).mkString("", "\n", "\n")
+        + delDecls.mkString("", "\n", "\n")
+        + decrDecls.mkString("", "\n", "\n")
+        + fnDecls.mkString("", "\n", "\n")
+        + delImpls.mkString("", "\n", "\n")
+        + decrImpls.mkString("", "\n", "\n")
+        + fnImpls.mkString("", "\n", "\n")
     CommonIncludes + generated
       .replaceAll(raw"\n(\s|\n)*\n", "\n")
       .strip() + "\n"
@@ -98,9 +105,9 @@ object Translator {
       s"struct { $fields };"
     }
 
-    def fnToC(fn: FnDef)(using bindings: Bindings) = {
-      // todo increment refcount for parameters
-
+    /** Returns code for the function's declaration and implementation
+      */
+    def fnToC(fn: FnDef)(using bindings: Bindings): (String, String) = {
       // param names don't need to be mangled because they're the first occurrence
       val params = fn.params
         .map(param => s"${typeRefToC(param.typ.name)} ${param.name.value}")
@@ -113,16 +120,21 @@ object Translator {
         .mkString("\n")
       val (bodySetup, body, bodyTeardown) =
         exprToC(fn.body)(using bindings.enterFn(fn))
-      val typeToC = typeRefToC(fn.returnType.name)
       val resVar = newVar("ret")
-      s"""|$typeToC ${mangleFnName(fn.name.value)}($params) {
-          |${indent(1)(paramsSetup)}
-          |${indent(1)(bodySetup)}
-          |  $typeToC $resVar = $body;
-          |${indent(1)(bodyTeardown)}
-          |${indent(1)(paramsTeardown)}
-          |  return $resVar;
-          |}""".stripMargin
+      val typeToC = typeRefToC(fn.returnType.name)
+
+      val signature = s"$typeToC ${mangleFnName(fn.name.value)}($params)"
+
+      val decl = s"$signature;"
+      val impl = s"""|$signature {
+                     |${indent(1)(paramsSetup)}
+                     |${indent(1)(bodySetup)}
+                     |  $typeToC $resVar = $body;
+                     |${indent(1)(bodyTeardown)}
+                     |${indent(1)(paramsTeardown)}
+                     |  return $resVar;
+                     |}""".stripMargin
+      (decl, impl)
     }
 
     /** @return
@@ -141,6 +153,7 @@ object Translator {
           ("", s"\"${value.replace("\"", "\\\"")}\"", "")
         case VarRef(name, _, _) =>
           ("", mangledVars.getOrElse(bindings.vars(name), name), "")
+        case SetFieldExpr(lhsVar, lhsField, value, span) => ???
         case BinExpr(lhs, op, rhs, typ) =>
           val (lhsSetup, lhsTranslated, lhsTeardown) = exprToC(lhs)
           val (rhsSetup, rhsTranslated, rhsTeardown) = exprToC(rhs)
@@ -297,6 +310,66 @@ object Translator {
       }
     }
 
+    /** Generate the signature and implementation for the decrementer function
+      */
+    def decrementer(
+        typ: TypeDef
+    )(using bindings: Bindings): (String, String) = {
+      val obj = "obj"
+
+      val cases = typ.cases.map { case EnumCase(Spanned(name, _), fields, _) =>
+        indent(1)(s"""|case ${tagName(name)}:
+                      |  break;""".stripMargin)
+      }
+
+      val sig =
+        s"void ${decrementerName(typ)}(${typeRefToC(typ.name)} $obj)"
+      val decl = s"$sig;"
+      val impl = s"""|$sig {
+                     |  if (--$obj->$RcField == 0) {
+                     |    ${deleterName(typ)}($obj);
+                     |    return;
+                     |  }
+                     |  switch ($obj->$KindField) {
+                     |${cases.mkString("\n")}
+                     |  }
+                     |}""".stripMargin
+      (decl, impl)
+    }
+
+    /** Generate the signature and implementation for the function to free an
+      * object
+      */
+    def deleter(typ: TypeDef)(using bindings: Bindings): (String, String) = {
+      val obj = "obj"
+
+      val cases = typ.cases.map {
+        case variant @ EnumCase(Spanned(ctorName, _), fields, _) =>
+          val body = fields
+            .map { case FieldDef(_, fieldName, typ, _) =>
+              val mangled = mangledFieldName(variant, fieldName.value)
+              indent(1)(
+                s"${decrRc(s"$obj->$mangled", bindings.types(typ.name))}"
+              )
+            }
+            .mkString("\n")
+          indent(1)(s"""|case ${tagName(ctorName)}:
+                        |$body
+                        |  break;""".stripMargin)
+      }
+
+      val sig =
+        s"void ${deleterName(typ)}(${typeRefToC(typ.name)} $obj)"
+      val decl = s"$sig;"
+      val impl = s"""|$sig {
+                     |  switch ($obj->$KindField) {
+                     |${cases.mkString("\n")}
+                     |  }
+                     |  free($obj);
+                     |}""".stripMargin
+      (decl, impl)
+    }
+
     private def newMangledVar(baseName: String): String = {
       baseName + "$" + mangledVars.keySet.filter(_.name == baseName).size
     }
@@ -321,10 +394,9 @@ object Translator {
     }
 
     private def decrRc(expr: String, typ: Type) = {
-      if (typ.isInstanceOf[TypeDef]) {
-        s"if (--$expr->$RcField == 0) free($expr);"
-      } else {
-        ""
+      typ match {
+        case td: TypeDef => s"${decrementerName(td)}($expr);"
+        case _           => ""
       }
     }
 
@@ -354,6 +426,20 @@ object Translator {
         case "str" => "char*"
         case name  => s"struct $name*"
       }
+    }
+
+    /** Name for function that decrements an object's refcount and adds it to
+      * the list of possible cyclic roots
+      */
+    private def decrementerName(typ: TypeDef) = {
+      s"$$decr_${typ.name}"
+    }
+
+    /** Name for function that frees an object and decrements the refcount of
+      * everything it refers to
+      */
+    private def deleterName(typ: TypeDef) = {
+      s"$$del_${typ.name}"
     }
 
     private def mangleFnName(fnName: String) =

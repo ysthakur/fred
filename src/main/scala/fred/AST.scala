@@ -105,6 +105,18 @@ case class IfExpr(cond: Expr, thenBody: Expr, elseBody: Expr, span: Span)
   override def typ = None
 }
 
+/**
+  * An expression for setting a field on a variable
+  */
+case class SetFieldExpr(
+    lhsVar: Spanned[String],
+    lhsField: Spanned[String],
+    value: Expr,
+    span: Span
+) extends Expr {
+  override def typ = None
+}
+
 /** What a variable reference can resolve to
   */
 enum VarDef {
@@ -120,14 +132,20 @@ enum VarDef {
     * @param varName
     *   The name of the variable that the field's value is being bound to
     */
-  case Pat(matchExpr: MatchExpr, pat: MatchPattern, field: String, varName: String, typ: Type)
+  case Pat(
+      matchExpr: MatchExpr,
+      pat: MatchPattern,
+      field: String,
+      varName: String,
+      typ: Type
+  )
 
   def typ: Type
 
   def name: String =
     this match {
-      case Let(expr, _) => expr.name.value
-      case VarDef.Param(param, _) => param.name.value
+      case Let(expr, _)             => expr.name.value
+      case VarDef.Param(param, _)   => param.name.value
       case Pat(_, _, _, varName, _) => varName
     }
 }

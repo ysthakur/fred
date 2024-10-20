@@ -9,6 +9,31 @@ struct Foo {
     struct { char* a_Baz; int b_Baz; };
   };
 };
+void $del_Foo(struct Foo* obj);
+void $decr_Foo(struct Foo* obj);
+int fn$foo(struct Foo* foo);
+int main();
+void $del_Foo(struct Foo* obj) {
+  switch (obj->kind) {
+  case Bar_tag:
+    break;
+  case Baz_tag:
+    break;
+  }
+  free(obj);
+}
+void $decr_Foo(struct Foo* obj) {
+  if (--obj->rc == 0) {
+    $del_Foo(obj);
+    return;
+  }
+  switch (obj->kind) {
+  case Bar_tag:
+    break;
+  case Baz_tag:
+    break;
+  }
+}
 int fn$foo(struct Foo* foo) {
   foo->rc ++;
   struct Foo* matchobj$0 = foo;
@@ -26,7 +51,7 @@ int fn$foo(struct Foo* foo) {
     break;
   }
   int ret$2 = matchres$1;
-  if (--foo->rc == 0) free(foo);
+  $decr_Foo(foo);
   return ret$2;
 }
 int main() {
@@ -37,6 +62,6 @@ int main() {
   struct Foo* foo = ctorres$3;
   foo->rc ++;
   int ret$4 = fn$foo(foo);
-  if (--foo->rc == 0) free(foo);
+  $decr_Foo(foo);
   return ret$4;
 }

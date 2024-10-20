@@ -25,11 +25,14 @@ class ExecTests extends munit.FunSuite with SnapshotAssertions {
         }
 
       fn main(): int =
-        let list = Cons { value: 1, next: Cons { value: 2, next: Cons { value: 3, next: Nil { } } } } in
+        let list = Cons { value: 1, next: Cons { value: 2, next: Cons { value: 4, next: Nil { } } } } in
         printf("%d\n", sum(list));
         0
       """
     val compiled = Compiler.compile(code, Paths.get("foo.c"), "a.out")
-    assertNoDiff("6", "./a.out".!!)
+    assertNoDiff("7", "./a.out".!!)
   }
 }
+
+
+// todo make example that the rc optimization stuff would apply to

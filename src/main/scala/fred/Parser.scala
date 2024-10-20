@@ -26,7 +26,7 @@ object Parser {
       def ~~[B](p2: P0[B]): P0[(A, B)] = (p1 <* ws) ~ p2
 
     val Keywords =
-      Set("data", "fn", "match", "let", "in", "if", "then", "else", "print")
+      Set("data", "fn", "match", "let", "in", "if", "then", "else", "set")
 
     // Not using Char.isUnicodeIentifierStart/Part for simplicity
     val idStart = alpha | P.char('_')
@@ -153,7 +153,16 @@ object Parser {
           }
         }
 
-    val seqAbleExpr = ifExpr | matchExpr
+    val setFieldExpr =
+      ((P.index.soft <* keyword("set") <* ws).with1 ~ (spannedId <* ws <* P
+        .char(
+          '.'
+        ) <* ws) ~ (spannedId <* ws) ~ expr).map {
+        case (start -> lhsVar -> lhsField -> value) =>
+          SetFieldExpr(lhsVar, lhsField, value, Span(start, value.span.end))
+      }
+
+    val seqAbleExpr = ifExpr | matchExpr | setFieldExpr
     val seqExpr = binOp(seqAbleExpr, P.stringIn(List(";")))
     def binOp(prev: P[Expr], op: P[String]): P[Expr] =
       ((prev <* ws) ~ (op ~ (P.index <* ws) ~ prev <* ws).rep0).map {

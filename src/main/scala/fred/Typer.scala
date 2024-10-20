@@ -123,6 +123,7 @@ object Typer {
         val typ = bindings.getVar(varRef).typ
         types.put(expr, typ)
         typ
+      case SetFieldExpr(lhsVar, lhsField, value, span) => ???
       case FieldAccess(obj, field, typ) =>
         val objType = resolveExprType(obj, bindings, types) match {
           case BuiltinType.Str =>
