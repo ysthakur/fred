@@ -34,7 +34,7 @@ class ExecTests extends munit.FunSuite with SnapshotAssertions {
     val valgrindOutBuf = StringBuilder()
     assertNoDiff(
       "7",
-      "valgrind --leak-check=yes ./a.out" !! ProcessLogger(
+      "valgrind -s --leak-check=yes ./a.out" !! ProcessLogger(
         _ => {},
         err => valgrindOutBuf.append('\n').append(err)
       )

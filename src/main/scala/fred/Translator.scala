@@ -16,15 +16,12 @@ object Translator {
   def toC(file: ParsedFile)(using typer: Typer): String = {
     given Bindings = Bindings.fromFile(file)
     val helper = Helper(typer)
-    val (delDecls, delImpls) = file.typeDefs.map(helper.deleter).unzip
     val (decrDecls, decrImpls) = file.typeDefs.map(helper.decrementer).unzip
     val (fnDecls, fnImpls) = file.fns.map(helper.fnToC).unzip
     val generated =
       file.typeDefs.map(helper.translateType).mkString("", "\n", "\n")
-        + delDecls.mkString("", "\n", "\n")
         + decrDecls.mkString("", "\n", "\n")
         + fnDecls.mkString("", "\n", "\n")
-        + delImpls.mkString("", "\n", "\n")
         + decrImpls.mkString("", "\n", "\n")
         + fnImpls.mkString("", "\n", "\n")
     CommonIncludes + generated
@@ -318,33 +315,8 @@ object Translator {
     )(using bindings: Bindings): (String, String) = {
       val obj = "obj"
 
-      val cases = typ.cases.map { case EnumCase(Spanned(name, _), fields, _) =>
-        indent(1)(s"""|case ${tagName(name)}:
-                      |  break;""".stripMargin)
-      }
-
-      val sig =
-        s"void ${decrementerName(typ)}(${typeRefToC(typ.name)} $obj)"
-      val decl = s"$sig;"
-      val impl = s"""|$sig {
-                     |  if (--$obj->$RcField == 0) {
-                     |    ${deleterName(typ)}($obj);
-                     |    return;
-                     |  }
-                     |  switch ($obj->$KindField) {
-                     |${cases.mkString("\n")}
-                     |  }
-                     |}""".stripMargin
-      (decl, impl)
-    }
-
-    /** Generate the signature and implementation for the function to free an
-      * object
-      */
-    def deleter(typ: TypeDef)(using bindings: Bindings): (String, String) = {
-      val obj = "obj"
-
-      val cases = typ.cases.map {
+      // Cases for deleting the object
+      val deleteCases = typ.cases.map {
         case variant @ EnumCase(Spanned(ctorName, _), fields, _) =>
           val body = fields
             .map { case FieldDef(_, fieldName, typ, _) =>
@@ -354,19 +326,22 @@ object Translator {
               )
             }
             .mkString("\n")
-          indent(1)(s"""|case ${tagName(ctorName)}:
+          indent(2)(s"""|case ${tagName(ctorName)}:
                         |$body
                         |  break;""".stripMargin)
       }
 
       val sig =
-        s"void ${deleterName(typ)}(${typeRefToC(typ.name)} $obj)"
+        s"void ${decrementerName(typ)}(${typeRefToC(typ.name)} $obj)"
       val decl = s"$sig;"
       val impl = s"""|$sig {
-                     |  switch ($obj->$KindField) {
-                     |${cases.mkString("\n")}
+                     |  if (--$obj->$RcField == 0) {
+                     |    switch ($obj->$KindField) {
+                     |${deleteCases.mkString("\n")}
+                     |    }
+                     |    free($obj);
+                     |  } else {
                      |  }
-                     |  free($obj);
                      |}""".stripMargin
       (decl, impl)
     }
@@ -434,13 +409,6 @@ object Translator {
       */
     private def decrementerName(typ: TypeDef) = {
       s"$$decr_${typ.name}"
-    }
-
-    /** Name for function that frees an object and decrements the refcount of
-      * everything it refers to
-      */
-    private def deleterName(typ: TypeDef) = {
-      s"$$del_${typ.name}"
     }
 
     private def mangleFnName(fnName: String) =

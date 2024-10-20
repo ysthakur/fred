@@ -9,29 +9,19 @@ struct Foo {
     struct { char* a_Baz; int b_Baz; };
   };
 };
-void $del_Foo(struct Foo* obj);
 void $decr_Foo(struct Foo* obj);
 int fn$foo(struct Foo* foo);
 int main();
-void $del_Foo(struct Foo* obj) {
-  switch (obj->kind) {
-  case Bar_tag:
-    break;
-  case Baz_tag:
-    break;
-  }
-  free(obj);
-}
 void $decr_Foo(struct Foo* obj) {
   if (--obj->rc == 0) {
-    $del_Foo(obj);
-    return;
-  }
-  switch (obj->kind) {
-  case Bar_tag:
-    break;
-  case Baz_tag:
-    break;
+    switch (obj->kind) {
+    case Bar_tag:
+      break;
+    case Baz_tag:
+      break;
+    }
+    free(obj);
+  } else {
   }
 }
 int fn$foo(struct Foo* foo) {
