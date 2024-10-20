@@ -10,19 +10,20 @@ struct Foo {
     struct { char* blech_Baz; int gah_Baz; int notcommon_Baz; };
   };
 };
-void $decr_Foo(struct Foo* obj);
+void $decr_Foo(struct Foo* this);
 char* fn$foo(struct Foo* param);
-void $decr_Foo(struct Foo* obj) {
-  if (--obj->rc == 0) {
-    switch (obj->kind) {
+void $decr_Foo(struct Foo* this) {
+  if (--this->rc == 0) {
+    switch (this->kind) {
     case Bar_tag:
-      $decr_Foo(obj->foo_Bar);
+      $decr_Foo(this->foo_Bar);
       break;
     case Baz_tag:
       break;
     }
-    free(obj);
+    free(this);
   } else {
+    // todo
   }
 }
 char* fn$foo(struct Foo* param) {

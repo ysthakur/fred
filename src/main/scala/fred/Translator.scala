@@ -6,7 +6,7 @@ import scala.collection.mutable
 object Translator {
   private val KindField = "kind"
   private val RcField = "rc"
-
+  private val This = "this"
   private val CommonIncludes = """|#include <stdlib.h>
                                   |#include <stdio.h>
                                   |""".stripMargin
@@ -16,7 +16,9 @@ object Translator {
   def toC(file: ParsedFile)(using typer: Typer): String = {
     given Bindings = Bindings.fromFile(file)
     val helper = Helper(typer)
-    val (decrDecls, decrImpls) = file.typeDefs.map(helper.decrementer).unzip
+    val (decrDecls, decrImpls) = file.typeDefs
+      .map(td => (Decrementer.decl(td), Decrementer.impl(td)))
+      .unzip
     val (fnDecls, fnImpls) = file.fns.map(helper.fnToC).unzip
     val generated =
       file.typeDefs.map(helper.translateType).mkString("", "\n", "\n")
@@ -28,6 +30,102 @@ object Translator {
       .replaceAll(raw"\n(\s|\n)*\n", "\n")
       .strip() + "\n"
   }
+
+  trait GeneratedFn(unmangledName: String) {
+    def returnType: String
+
+    def body(typ: TypeDef)(using Bindings): String
+
+    def name(typ: TypeDef) = s"$$${unmangledName}_${typ.name}"
+
+    private def sig(typ: TypeDef) =
+      s"$returnType ${name(typ)}(${typeRefToC(typ.name)} $This)"
+
+    def decl(typ: TypeDef) = s"${sig(typ)};"
+
+    def impl(typ: TypeDef)(using Bindings) =
+      s"${sig(typ)} {\n${indent(1)(body(typ))}\n}"
+  }
+
+  /** Generate the signature and implementation for the decrementer function
+    */
+  object Decrementer extends GeneratedFn("decr") {
+    override def returnType = "void"
+
+    override def body(typ: TypeDef)(using bindings: Bindings): String = {
+      // Cases for deleting the object
+      val deleteCases = typ.cases.map {
+        case variant @ EnumCase(Spanned(ctorName, _), fields, _) =>
+          val body = fields
+            .map { case FieldDef(_, fieldName, typ, _) =>
+              val mangled = mangledFieldName(variant, fieldName.value)
+              indent(1)(
+                s"${decrRc(s"$This->$mangled", bindings.types(typ.name))}"
+              )
+            }
+            .mkString("\n")
+          indent(1)(s"""|case ${tagName(ctorName)}:
+                        |$body
+                        |  break;""".stripMargin)
+      }
+
+      s"""|if (--$This->$RcField == 0) {
+          |  switch ($This->$KindField) {
+          |${deleteCases.mkString("\n")}
+          |  }
+          |  free($This);
+          |} else {
+          |  // todo
+          |}""".stripMargin
+    }
+  }
+
+  private def typeRefToC(typeName: String) = {
+    typeName match {
+      case "int" => "int"
+      case "str" => "char*"
+      case name  => s"struct $name*"
+    }
+  }
+
+  /** Apply `2 * level` spaces of indentation to every line in the given string
+    */
+  private def indent(level: Int)(s: String): String = {
+    s.split("\n").map(line => "  " * level + line).mkString("\n")
+  }
+
+  private def incrRc(expr: String, typ: Type) = {
+    if (typ.isInstanceOf[TypeDef]) {
+      s"$expr->$RcField ++;"
+    } else {
+      ""
+    }
+  }
+
+  private def decrRc(expr: String, typ: Type) = {
+    typ match {
+      case td: TypeDef => s"${Decrementer.name(td)}($expr);"
+      case _           => ""
+    }
+  }
+
+  private def mangleFnName(fnName: String) =
+    if (NoMangleFns.contains(fnName)) fnName else "fn$" + fnName
+
+  /** Field names need to be mangled so that multiple cases can have fields with
+    * the same name
+    *
+    * @param enumCase
+    *   The enum case/variant inside which this field is
+    */
+  private def mangledFieldName(enumCase: EnumCase, field: String) = {
+    s"${field}_${enumCase.name.value}"
+  }
+
+  /** Mangle a constructor name to use it as the tag for a tagged union
+    * representing the original ADT
+    */
+  private def tagName(ctorName: String): String = s"${ctorName}_tag"
 
   private class Helper(typer: Typer) {
 
@@ -258,9 +356,9 @@ object Translator {
                 oldBindings.enterPattern(matchExpr, pat, objType)
               val (bindingSetups, bindingTeardowns) =
                 patBindings.map { (fieldName, varName) =>
-                  val mangledFieldName =
+                  val fieldNameMangled =
                     if (objType.hasCommonField(fieldName.value)) fieldName.value
-                    else this.mangledFieldName(variant, fieldName.value)
+                    else mangledFieldName(variant, fieldName.value)
                   val shouldMangle = oldBindings.vars.contains(varName.value)
                   val mangledVarName =
                     if (shouldMangle) newMangledVar(varName.value)
@@ -273,7 +371,7 @@ object Translator {
                   }
                   addBinding(
                     mangledVarName,
-                    s"$objVar->$mangledFieldName",
+                    s"$objVar->$fieldNameMangled",
                     newBindings.types(
                       variant.fields
                         .find(_.name.value == fieldName.value)
@@ -308,44 +406,6 @@ object Translator {
       }
     }
 
-    /** Generate the signature and implementation for the decrementer function
-      */
-    def decrementer(
-        typ: TypeDef
-    )(using bindings: Bindings): (String, String) = {
-      val obj = "obj"
-
-      // Cases for deleting the object
-      val deleteCases = typ.cases.map {
-        case variant @ EnumCase(Spanned(ctorName, _), fields, _) =>
-          val body = fields
-            .map { case FieldDef(_, fieldName, typ, _) =>
-              val mangled = mangledFieldName(variant, fieldName.value)
-              indent(1)(
-                s"${decrRc(s"$obj->$mangled", bindings.types(typ.name))}"
-              )
-            }
-            .mkString("\n")
-          indent(2)(s"""|case ${tagName(ctorName)}:
-                        |$body
-                        |  break;""".stripMargin)
-      }
-
-      val sig =
-        s"void ${decrementerName(typ)}(${typeRefToC(typ.name)} $obj)"
-      val decl = s"$sig;"
-      val impl = s"""|$sig {
-                     |  if (--$obj->$RcField == 0) {
-                     |    switch ($obj->$KindField) {
-                     |${deleteCases.mkString("\n")}
-                     |    }
-                     |    free($obj);
-                     |  } else {
-                     |  }
-                     |}""".stripMargin
-      (decl, impl)
-    }
-
     private def newMangledVar(baseName: String): String = {
       baseName + "$" + mangledVars.keySet.filter(_.name == baseName).size
     }
@@ -359,21 +419,6 @@ object Translator {
                       |${incrRc(varName, typ)}""".stripMargin
       val teardown = decrRc(varName, typ)
       (setup, teardown)
-    }
-
-    private def incrRc(expr: String, typ: Type) = {
-      if (typ.isInstanceOf[TypeDef]) {
-        s"$expr->$RcField ++;"
-      } else {
-        ""
-      }
-    }
-
-    private def decrRc(expr: String, typ: Type) = {
-      typ match {
-        case td: TypeDef => s"${decrementerName(td)}($expr);"
-        case _           => ""
-      }
     }
 
     private def merge(
@@ -394,46 +439,6 @@ object Translator {
       val res = prefix + "$" + resVarCounter
       resVarCounter += 1
       res
-    }
-
-    private def typeRefToC(typeName: String) = {
-      typeName match {
-        case "int" => "int"
-        case "str" => "char*"
-        case name  => s"struct $name*"
-      }
-    }
-
-    /** Name for function that decrements an object's refcount and adds it to
-      * the list of possible cyclic roots
-      */
-    private def decrementerName(typ: TypeDef) = {
-      s"$$decr_${typ.name}"
-    }
-
-    private def mangleFnName(fnName: String) =
-      if (NoMangleFns.contains(fnName)) fnName else "fn$" + fnName
-
-    /** Field names need to be mangled so that multiple cases can have fields
-      * with the same name
-      *
-      * @param enumCase
-      *   The enum case/variant inside which this field is
-      */
-    private def mangledFieldName(enumCase: EnumCase, field: String) = {
-      s"${field}_${enumCase.name.value}"
-    }
-
-    /** Mangle a constructor name to use it as the tag for a tagged union
-      * representing the original ADT
-      */
-    private def tagName(ctorName: String): String = s"${ctorName}_tag"
-
-    /** Apply `2 * level` spaces of indentation to every line in the given
-      * string
-      */
-    private def indent(level: Int)(s: String): String = {
-      s.split("\n").map(line => "  " * level + line).mkString("\n")
     }
   }
 }
