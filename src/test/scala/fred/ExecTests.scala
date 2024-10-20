@@ -30,9 +30,16 @@ class ExecTests extends munit.FunSuite with SnapshotAssertions {
         0
       """
     val compiled = Compiler.compile(code, Paths.get("foo.c"), "a.out")
-    assertNoDiff("7", "./a.out".!!)
+
+    val valgrindOutBuf = StringBuilder()
+    assertNoDiff(
+      "7",
+      "valgrind --leak-check=yes ./a.out" !! ProcessLogger(
+        _ => {},
+        err => valgrindOutBuf.append('\n').append(err)
+      )
+    )
+    val valgrindOut = valgrindOutBuf.toString
+    assert(valgrindOut.contains("ERROR SUMMARY: 0 errors"), valgrindOut)
   }
 }
-
-
-// todo make example that the rc optimization stuff would apply to
