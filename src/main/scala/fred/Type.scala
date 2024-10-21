@@ -27,8 +27,8 @@ case class TypeDef(
 ) extends Type {
   def name = nameSpanned.value
 
-  /**
-    * Do all variants have the given field, and is it the same type in all the variants?
+  /** Do all variants have the given field, and is it the same type in all the
+    * variants?
     */
   def hasCommonField(field: String): Boolean = {
     val fields = this.cases.flatMap(_.fields.find(_.name.value == field))

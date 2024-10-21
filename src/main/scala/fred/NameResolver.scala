@@ -1,6 +1,7 @@
 package fred
 
 object NameResolver {
+
   /** Find [[TypeRef]]s that didn't resolve to anything
     */
   def checkTypes(file: ParsedFile): List[TypeRef] = {

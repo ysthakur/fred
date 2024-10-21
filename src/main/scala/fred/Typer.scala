@@ -124,10 +124,15 @@ object Typer {
         types.put(expr, typ)
         typ
       case SetFieldExpr(obj, field, value, span) =>
-        val objType = bindings.getVar(VarRef(obj.value, None, obj.span)).typ match {
-          case td: TypeDef => td
-          case builtinType => throw new CompileError(s"Can't set fields on $builtinType", obj.span)
-        }
+        val objType =
+          bindings.getVar(VarRef(obj.value, None, obj.span)).typ match {
+            case td: TypeDef => td
+            case builtinType =>
+              throw new CompileError(
+                s"Can't set fields on $builtinType",
+                obj.span
+              )
+          }
         if (!objType.hasCommonField(field.value)) {
           throw new CompileError(
             s"${field.value} isn't a common field in ${objType.name}",

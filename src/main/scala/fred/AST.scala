@@ -105,8 +105,7 @@ case class IfExpr(cond: Expr, thenBody: Expr, elseBody: Expr, span: Span)
   override def typ = None
 }
 
-/**
-  * An expression for setting a field on a variable
+/** An expression for setting a field on a variable
   */
 case class SetFieldExpr(
     lhsObj: Spanned[String],

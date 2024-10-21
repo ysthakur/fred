@@ -5,6 +5,7 @@ enum Color { kBlack, kGray, kWhite };
 enum Foo_kind { Bar_tag, Baz_tag };
 struct Foo {
   int rc;
+  enum Color color;
   enum Foo_kind kind;
   union {
     struct { int x_Bar; int y_Bar; };
@@ -12,6 +13,10 @@ struct Foo {
   };
 };
 void $decr_Foo(struct Foo* this);
+void $markGray_Foo(struct Foo* this);
+void $scan_Foo(struct Foo* this);
+void $scanBlack_Foo(struct Foo* this);
+void $collectWhite_Foo(struct Foo* this);
 int fn$foo(struct Foo* foo);
 int main();
 void $decr_Foo(struct Foo* this) {
@@ -25,6 +30,53 @@ void $decr_Foo(struct Foo* this) {
     free(this);
   } else {
     // todo
+  }
+}
+void $markGray_Foo(struct Foo* this) {
+  if (this->color == kGray) return;
+  this->color = kGray;
+    switch (this->kind) {
+    case Bar_tag:
+      break;
+    case Baz_tag:
+      break;
+    }
+}
+void $scan_Foo(struct Foo* this) {
+  if (this->color != kGray) return;
+  if (this->rc > 0) {
+    $scanBlack_Foo(this);
+    return;
+  }
+  this->color = kWhite;
+  switch (this->kind) {
+  case Bar_tag:
+    break;
+  case Baz_tag:
+    break;
+  }
+}
+void $scanBlack_Foo(struct Foo* this) {
+  if (this->color != kBlack) {
+    this->color = kBlack;
+    switch (this->kind) {
+    case Bar_tag:
+      break;
+    case Baz_tag:
+      break;
+    }
+  }
+}
+void $collectWhite_Foo(struct Foo* this) {
+  if (this->color == kWhite) {
+    this->color = kBlack;
+    switch (this->kind) {
+    case Bar_tag:
+      break;
+    case Baz_tag:
+      break;
+    }
+    free(this);
   }
 }
 int fn$foo(struct Foo* foo) {

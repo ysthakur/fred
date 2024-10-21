@@ -22,15 +22,16 @@ object Translator {
   def toC(file: ParsedFile)(using typer: Typer): String = {
     given Bindings = Bindings.fromFile(file)
     val helper = Helper(typer)
-    val (decrDecls, decrImpls) = file.typeDefs
-      .map(td => (Decrementer.decl(td), Decrementer.impl(td)))
-      .unzip
+    val (genDecls, genImpls) =
+      List(Decrementer, MarkGray, Scan, ScanBlack, CollectWhite)
+        .flatMap(gen => file.typeDefs.map(td => (gen.decl(td), gen.impl(td))))
+        .unzip
     val (fnDecls, fnImpls) = file.fns.map(helper.fnToC).unzip
     val generated =
       file.typeDefs.map(helper.translateType).mkString("", "\n", "\n")
-        + decrDecls.mkString("", "\n", "\n")
+        + genDecls.mkString("", "\n", "\n")
         + fnDecls.mkString("", "\n", "\n")
-        + decrImpls.mkString("", "\n", "\n")
+        + genImpls.mkString("", "\n", "\n")
         + fnImpls.mkString("", "\n", "\n")
     CommonIncludes + generated
       .replaceAll(raw"\n(\s|\n)*\n", "\n")
@@ -93,7 +94,7 @@ object Translator {
               bindings.types(fieldTypeRef.name) match {
                 case fieldType: TypeDef =>
                   s"""|${decrRc(s"$This->$mangled", fieldType)}
-                      |${MarkGray.name(fieldType)}""".stripMargin
+                      |${MarkGray.name(fieldType)}($This->$mangled);""".stripMargin
                 case _ => ""
               }
             }
@@ -103,6 +104,86 @@ object Translator {
       s"""|if ($This->$ColorField == $Gray) return;
           |$This->$ColorField = $Gray;
           |$recMarks""".stripMargin
+    }
+  }
+
+  private object Scan extends GeneratedFn("scan") {
+    override def returnType: String = "void"
+
+    override def body(typ: TypeDef)(using bindings: Bindings): String = {
+      val recScan =
+        switch(This, typ) { variant =>
+          variant.fields
+            .map { case FieldDef(_, fieldName, fieldTypeRef, _) =>
+              val mangled = cFieldName(fieldName.value, typ, variant)
+              bindings.types(fieldTypeRef.name) match {
+                case fieldType: TypeDef =>
+                  s"${Scan.name(fieldType)}($This->$mangled);"
+                case _ => ""
+              }
+            }
+            .mkString("\n")
+        }
+
+      s"""|if ($This->$ColorField != $Gray) return;
+          |if ($This->$RcField > 0) {
+          |  ${ScanBlack.name(typ)}($This);
+          |  return;
+          |}
+          |$This->$ColorField = $White;
+          |$recScan""".stripMargin
+    }
+  }
+
+  private object ScanBlack extends GeneratedFn("scanBlack") {
+    override def returnType: String = "void"
+
+    override def body(typ: TypeDef)(using bindings: Bindings): String = {
+      val recScan = indent(1) {
+        switch(This, typ) { variant =>
+          variant.fields
+            .map { case FieldDef(_, fieldName, fieldTypeRef, _) =>
+              val mangled = cFieldName(fieldName.value, typ, variant)
+              bindings.types(fieldTypeRef.name) match {
+                case fieldType: TypeDef =>
+                  s"""|${incrRc(s"$This->$mangled", fieldType)}
+                      |${ScanBlack.name(fieldType)}($This->$mangled);""".stripMargin
+                case _ => ""
+              }
+            }
+            .mkString("\n")
+        }
+      }
+      s"""|if ($This->$ColorField != $Black) {
+          |  $This->$ColorField = $Black;
+          |$recScan
+          |}""".stripMargin
+    }
+  }
+
+  private object CollectWhite extends GeneratedFn("collectWhite") {
+    override def returnType: String = "void"
+
+    override def body(typ: TypeDef)(using bindings: Bindings): String = {
+      val rec = indent(1) {
+        switch(This, typ) { variant =>
+          variant.fields
+            .map { case FieldDef(_, fieldName, fieldTypeRef, _) =>
+              val mangled = cFieldName(fieldName.value, typ, variant)
+              bindings.types(fieldTypeRef.name) match {
+                case fieldType: TypeDef =>
+                  s"${CollectWhite.name(fieldType)}($This->$mangled);"
+                case _ => ""
+              }
+            }
+            .mkString("\n")
+        }
+      }
+      s"""|if ($This->$ColorField == $White) {
+          |  $This->$ColorField = $Black;
+          |$rec
+          |  free($This);
+          |}""".stripMargin
     }
   }
 
@@ -230,6 +311,7 @@ object Translator {
 
       val struct = s"""|struct $name {
                        |  int $RcField;
+                       |  enum Color $ColorField;
                        |  enum ${name}_kind $KindField;
                        |$commonFieldsToC
                        |  union {
