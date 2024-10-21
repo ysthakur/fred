@@ -77,7 +77,9 @@ object Translator {
           |$deleteCases
           |  free($This);
           |} else {
-          |  // todo
+          |  ${MarkGray.name(typ)}($This);
+          |  ${Scan.name(typ)}($This);
+          |  ${CollectWhite.name(typ)}($This);
           |}""".stripMargin
     }
   }

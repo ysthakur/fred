@@ -30,7 +30,9 @@ void $decr_Foo(struct Foo* this) {
     }
     free(this);
   } else {
-    // todo
+    $markGray_Foo(this);
+    $scan_Foo(this);
+    $collectWhite_Foo(this);
   }
 }
 void $markGray_Foo(struct Foo* this) {
