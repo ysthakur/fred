@@ -38,14 +38,14 @@ void $decr_Foo(struct Foo* this) {
 void $markGray_Foo(struct Foo* this) {
   if (this->color == kGray) return;
   this->color = kGray;
-    switch (this->kind) {
-    case Bar_tag:
-      $decr_Foo(this->foo_Bar);
-      $markGray_Foo(this->foo_Bar);
-      break;
-    case Baz_tag:
-      break;
-    }
+  switch (this->kind) {
+  case Bar_tag:
+    this->foo_Bar->rc --;
+    $markGray_Foo(this->foo_Bar);
+    break;
+  case Baz_tag:
+    break;
+  }
 }
 void $scan_Foo(struct Foo* this) {
   if (this->color != kGray) return;

@@ -37,12 +37,12 @@ void $decr_Foo(struct Foo* this) {
 void $markGray_Foo(struct Foo* this) {
   if (this->color == kGray) return;
   this->color = kGray;
-    switch (this->kind) {
-    case Bar_tag:
-      break;
-    case Baz_tag:
-      break;
-    }
+  switch (this->kind) {
+  case Bar_tag:
+    break;
+  case Baz_tag:
+    break;
+  }
 }
 void $scan_Foo(struct Foo* this) {
   if (this->color != kGray) return;
@@ -104,6 +104,7 @@ int fn$foo(struct Foo* foo) {
 int main() {
   struct Foo* ctorres$3 = malloc(sizeof (struct Foo));
   ctorres$3->rc = 0;
+  ctorres$3->color = kBlack;
   ctorres$3->kind = Bar_tag;
   ctorres$3->x_Bar = 1;
   ctorres$3->y_Bar = 2;

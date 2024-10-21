@@ -34,10 +34,10 @@ void $decr_Foo(struct Foo* this) {
 void $markGray_Foo(struct Foo* this) {
   if (this->color == kGray) return;
   this->color = kGray;
-    switch (this->kind) {
-    case Foo_tag:
-      break;
-    }
+  switch (this->kind) {
+  case Foo_tag:
+    break;
+  }
 }
 void $scan_Foo(struct Foo* this) {
   if (this->color != kGray) return;

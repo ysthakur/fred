@@ -88,21 +88,21 @@ object Translator {
     override def returnType: String = "void"
 
     override def body(typ: TypeDef)(using bindings: Bindings): String = {
-      val recMarks = indent(1) {
+      val recMarks =
         switch(This, typ) { variant =>
           variant.fields
             .map { case FieldDef(_, fieldName, fieldTypeRef, _) =>
               val mangled = cFieldName(fieldName.value, typ, variant)
               bindings.types(fieldTypeRef.name) match {
                 case fieldType: TypeDef =>
-                  s"""|${decrRc(s"$This->$mangled", fieldType)}
+                  s"""|$This->$mangled->$RcField --;
                       |${MarkGray.name(fieldType)}($This->$mangled);""".stripMargin
                 case _ => ""
               }
             }
             .mkString("\n")
         }
-      }
+
       s"""|if ($This->$ColorField == $Gray) return;
           |$This->$ColorField = $Gray;
           |$recMarks""".stripMargin
@@ -148,7 +148,7 @@ object Translator {
               val mangled = cFieldName(fieldName.value, typ, variant)
               bindings.types(fieldTypeRef.name) match {
                 case fieldType: TypeDef =>
-                  s"""|${incrRc(s"$This->$mangled", fieldType)}
+                  s"""|$This->$mangled->$RcField ++;
                       |${ScanBlack.name(fieldType)}($This->$mangled);""".stripMargin
                 case _ => ""
               }
@@ -473,6 +473,7 @@ object Translator {
           val setup =
             s"""|${typeRefToC(typ.name)} $resVar = malloc(sizeof (struct ${typ.name}));
                 |$resVar->$RcField = 0;
+                |$resVar->$ColorField = $Black;
                 |$resVar->$KindField = ${tagName(ctorName.value)};
                 |$valueSetups""".stripMargin
           (setup, resVar, "")
