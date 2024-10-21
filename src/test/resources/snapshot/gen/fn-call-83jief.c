@@ -1,5 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
+
+enum Color { kBlack, kGray, kWhite };
 int fn$fact(int i);
 int fn$fact(int i) {
   int ifres$0;

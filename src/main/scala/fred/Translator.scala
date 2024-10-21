@@ -7,9 +7,15 @@ object Translator {
   private val KindField = "kind"
   private val RcField = "rc"
   private val This = "this"
-  private val CommonIncludes = """|#include <stdlib.h>
-                                  |#include <stdio.h>
-                                  |""".stripMargin
+  private val Black = "kBlack"
+  private val Gray = "kGray"
+  private val White = "kWhite"
+  private val ColorField = "color"
+  private val CommonIncludes = s"""|#include <stdlib.h>
+                                   |#include <stdio.h>
+                                   |
+                                   |enum Color { $Black, $Gray, $White };
+                                   |""".stripMargin
 
   private val NoMangleFns = Set("main", "printf")
 
@@ -49,35 +55,70 @@ object Translator {
 
   /** Generate the signature and implementation for the decrementer function
     */
-  object Decrementer extends GeneratedFn("decr") {
+  private object Decrementer extends GeneratedFn("decr") {
     override def returnType = "void"
 
     override def body(typ: TypeDef)(using bindings: Bindings): String = {
       // Cases for deleting the object
-      val deleteCases = typ.cases.map {
-        case variant @ EnumCase(Spanned(ctorName, _), fields, _) =>
-          val body = fields
-            .map { case FieldDef(_, fieldName, fieldType, _) =>
-              val mangled = cFieldName(fieldName.value, typ, variant)
-              indent(1)(
+      val deleteCases = indent(1) {
+        switch(This, typ) {
+          case variant @ EnumCase(Spanned(ctorName, _), fields, _) =>
+            fields
+              .map { case FieldDef(_, fieldName, fieldType, _) =>
+                val mangled = cFieldName(fieldName.value, typ, variant)
                 s"${decrRc(s"$This->$mangled", bindings.types(fieldType.name))}"
-              )
-            }
-            .mkString("\n")
-          indent(1)(s"""|case ${tagName(ctorName)}:
-                        |$body
-                        |  break;""".stripMargin)
+              }
+              .mkString("\n")
+        }
       }
 
       s"""|if (--$This->$RcField == 0) {
-          |  switch ($This->$KindField) {
-          |${deleteCases.mkString("\n")}
-          |  }
+          |$deleteCases
           |  free($This);
           |} else {
           |  // todo
           |}""".stripMargin
     }
+  }
+
+  private object MarkGray extends GeneratedFn("markGray") {
+    override def returnType: String = "void"
+
+    override def body(typ: TypeDef)(using bindings: Bindings): String = {
+      val recMarks = indent(1) {
+        switch(This, typ) { variant =>
+          variant.fields
+            .map { case FieldDef(_, fieldName, fieldTypeRef, _) =>
+              val mangled = cFieldName(fieldName.value, typ, variant)
+              bindings.types(fieldTypeRef.name) match {
+                case fieldType: TypeDef =>
+                  s"""|${decrRc(s"$This->$mangled", fieldType)}
+                      |${MarkGray.name(fieldType)}""".stripMargin
+                case _ => ""
+              }
+            }
+            .mkString("\n")
+        }
+      }
+      s"""|if ($This->$ColorField == $Gray) return;
+          |$This->$ColorField = $Gray;
+          |$recMarks""".stripMargin
+    }
+  }
+
+  private def switch(expr: String, typ: TypeDef)(
+      createArm: EnumCase => String
+  ): String = {
+    val armsToC = typ.cases
+      .map { variant =>
+        s"""|case ${tagName(variant.name.value)}:
+            |${indent(1)(createArm(variant))}
+            |  break;""".stripMargin
+      }
+      .mkString("\n")
+    s"""|switch ($expr->$KindField) {
+        |$armsToC
+        |}""".stripMargin
   }
 
   private def typeRefToC(typeName: String) = {

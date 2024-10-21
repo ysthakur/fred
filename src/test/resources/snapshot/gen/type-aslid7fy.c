@@ -1,5 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
+
+enum Color { kBlack, kGray, kWhite };
 enum Foo_kind { Bar_tag, Baz_tag };
 struct Foo {
   int rc;

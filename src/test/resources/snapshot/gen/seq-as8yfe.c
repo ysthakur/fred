@@ -1,5 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
+
+enum Color { kBlack, kGray, kWhite };
 int fn$foo(int bar);
 int fn$foo(int bar) {
   bar;
