@@ -57,10 +57,10 @@ object Translator {
       val deleteCases = typ.cases.map {
         case variant @ EnumCase(Spanned(ctorName, _), fields, _) =>
           val body = fields
-            .map { case FieldDef(_, fieldName, typ, _) =>
-              val mangled = mangledFieldName(variant, fieldName.value)
+            .map { case FieldDef(_, fieldName, fieldType, _) =>
+              val mangled = cFieldName(fieldName.value, typ, variant)
               indent(1)(
-                s"${decrRc(s"$This->$mangled", bindings.types(typ.name))}"
+                s"${decrRc(s"$This->$mangled", bindings.types(fieldType.name))}"
               )
             }
             .mkString("\n")
@@ -107,6 +107,13 @@ object Translator {
       case td: TypeDef => s"${Decrementer.name(td)}($expr);"
       case _           => ""
     }
+  }
+
+  /** Get the name of this field in C (mangled if necessary)
+    */
+  private def cFieldName(fieldName: String, typ: TypeDef, variant: EnumCase) = {
+    if (typ.hasCommonField(fieldName)) fieldName
+    else mangledFieldName(variant, fieldName)
   }
 
   private def mangleFnName(fnName: String) =
@@ -330,10 +337,8 @@ object Translator {
                   .name
               )
               val (valueSetup, valueToC, valueTeardown) = exprToC(value)
-              val mangledName =
-                if (typ.hasCommonField(fieldName.value)) fieldName.value
-                else mangledFieldName(variant, fieldName.value)
-              val fieldAccess = s"$resVar->$mangledName"
+              val fieldAccess =
+                s"$resVar->${cFieldName(fieldName.value, typ, variant)}"
               s"""|$valueSetup
                   |$fieldAccess = $valueToC;
                   |${incrRc(fieldAccess, fieldType)}

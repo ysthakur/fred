@@ -42,4 +42,32 @@ class ExecTests extends munit.FunSuite with SnapshotAssertions {
     val valgrindOut = valgrindOutBuf.toString
     assert(valgrindOut.contains("ERROR SUMMARY: 0 errors"), valgrindOut)
   }
+
+  test("Basic cycle") {
+    val code = """
+      data Option
+        = None {}
+        | Some { value: List }
+      data List = List { value: int, mut next: Option }
+
+      fn main(): int =
+        let a = List { value: 1, next: None {} } in
+        let b = List { value: 2, next: Some { value: a } } in
+        set a.next Some { value: b };
+        printf("%d\n", a.value + b.value);
+        0
+      """
+    val compiled = Compiler.compile(code, Paths.get("foo.c"), "a.out")
+
+    val valgrindOutBuf = StringBuilder()
+    assertNoDiff(
+      "3",
+      "valgrind -s --leak-check=yes ./a.out" !! ProcessLogger(
+        _ => {},
+        err => valgrindOutBuf.append('\n').append(err)
+      )
+    )
+    val valgrindOut = valgrindOutBuf.toString
+    assert(valgrindOut.contains("ERROR SUMMARY: 0 errors"), valgrindOut)
+  }
 }
