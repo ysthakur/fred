@@ -37,6 +37,18 @@ class TranslatorTests extends munit.FunSuite with SnapshotAssertions {
     assertFileSnapshot(generated.toString, "gen/seq-as8yfe.c")
   }
 
+  test("Setting fields") {
+    val parsed = Parser.parse("""
+      data Foo = Foo { field: int }
+      fn bar(f: Foo): int =
+        set f.field 5;
+        set f.field 6
+      """)
+    given Typer = Typer.resolveAllTypes(parsed)
+    val generated = Translator.toC(parsed)
+    assertFileSnapshot(generated.toString, "gen/set-field-sfdu29.c")
+  }
+
   test("If expressions") {
     val parsed = Parser.parse("""
       fn foo(bar: int): str =

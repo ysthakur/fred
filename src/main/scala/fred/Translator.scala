@@ -248,7 +248,13 @@ object Translator {
           ("", s"\"${value.replace("\"", "\\\"")}\"", "")
         case VarRef(name, _, _) =>
           ("", mangledVars.getOrElse(bindings.vars(name), name), "")
-        case SetFieldExpr(lhsVar, lhsField, value, span) => ???
+        case SetFieldExpr(obj, field, value, span) =>
+          val (valSetup, valTranslated, valTeardown) = exprToC(value)
+          (
+            valSetup,
+            s"${obj.value}->${field.value} = $valTranslated",
+            valTeardown
+          )
         case BinExpr(lhs, op, rhs, typ) =>
           val (lhsSetup, lhsTranslated, lhsTeardown) = exprToC(lhs)
           val (rhsSetup, rhsTranslated, rhsTeardown) = exprToC(rhs)

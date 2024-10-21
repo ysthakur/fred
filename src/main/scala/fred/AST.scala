@@ -109,7 +109,7 @@ case class IfExpr(cond: Expr, thenBody: Expr, elseBody: Expr, span: Span)
   * An expression for setting a field on a variable
   */
 case class SetFieldExpr(
-    lhsVar: Spanned[String],
+    lhsObj: Spanned[String],
     lhsField: Spanned[String],
     value: Expr,
     span: Span

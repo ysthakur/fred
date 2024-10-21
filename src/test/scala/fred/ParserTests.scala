@@ -84,4 +84,14 @@ class ParserTests extends munit.FunSuite with SnapshotAssertions {
       "parser/match-expr-qpw8jf.scala"
     )
   }
+
+  test("Setting fields") {
+    val parsed = Parser.parse("""|fn foo(): int =
+                                 |set foo.bar 4;
+                                 |foo""".stripMargin)
+    assertFileSnapshot(
+      pprint.apply(parsed).plainText,
+      "parser/set-d8ulsb.scala"
+    )
+  }
 }

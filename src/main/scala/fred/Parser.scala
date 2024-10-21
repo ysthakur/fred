@@ -153,16 +153,18 @@ object Parser {
           }
         }
 
-    val setFieldExpr =
-      ((P.index.soft <* keyword("set") <* ws).with1 ~ (spannedId <* ws <* P
-        .char(
-          '.'
-        ) <* ws) ~ (spannedId <* ws) ~ expr).map {
-        case (start -> lhsVar -> lhsField -> value) =>
-          SetFieldExpr(lhsVar, lhsField, value, Span(start, value.span.end))
-      }
+    val setFieldExpr: P[Expr] =
+      P.defer(
+        ((P.index.soft <* keyword("set") <* ws).with1 ~ (spannedId <* ws <* P
+          .char(
+            '.'
+          ) <* ws) ~ (spannedId <* ws) ~ seqAbleExpr).map {
+          case (start -> lhsVar -> lhsField -> value) =>
+            SetFieldExpr(lhsVar, lhsField, value, Span(start, value.span.end))
+        }
+      )
 
-    val seqAbleExpr = ifExpr | matchExpr | setFieldExpr
+    val seqAbleExpr: P[Expr] = ifExpr | matchExpr | setFieldExpr
     val seqExpr = binOp(seqAbleExpr, P.stringIn(List(";")))
     def binOp(prev: P[Expr], op: P[String]): P[Expr] =
       ((prev <* ws) ~ (op ~ (P.index <* ws) ~ prev <* ws).rep0).map {

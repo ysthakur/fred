@@ -123,7 +123,24 @@ object Typer {
         val typ = bindings.getVar(varRef).typ
         types.put(expr, typ)
         typ
-      case SetFieldExpr(lhsVar, lhsField, value, span) => ???
+      case SetFieldExpr(obj, field, value, span) =>
+        val objType = bindings.getVar(VarRef(obj.value, None, obj.span)).typ match {
+          case td: TypeDef => td
+          case builtinType => throw new CompileError(s"Can't set fields on $builtinType", obj.span)
+        }
+        if (!objType.hasCommonField(field.value)) {
+          throw new CompileError(
+            s"${field.value} isn't a common field in ${objType.name}",
+            field.span
+          )
+        }
+        val fieldTypeRef =
+          objType.cases.head.fields.find(_.name.value == field.value).get.typ
+        val typ = bindings.getType(fieldTypeRef)
+        resolveExprType(value, bindings, types)
+        types.put(expr, typ)
+        typ
+
       case FieldAccess(obj, field, typ) =>
         val objType = resolveExprType(obj, bindings, types) match {
           case BuiltinType.Str =>
