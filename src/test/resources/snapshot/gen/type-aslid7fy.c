@@ -2,6 +2,22 @@
 #include <stdio.h>
 
 enum Color { kBlack, kGray, kWhite };
+
+struct FreeCell {
+  int rc;
+  enum Color color;
+  struct FreeCell *next;
+};
+
+struct FreeCell *freeList = NULL;
+
+void collectFreeList() {
+  while (freeList != NULL) {
+    struct FreeCell *next = freeList->next;
+    free(freeList);
+    freeList = next;
+  }
+}
 enum Foo_kind { Bar_tag, Baz_tag };
 struct Foo {
   int rc;
@@ -32,7 +48,9 @@ void $decr_Foo(struct Foo* this) {
   } else {
     $markGray_Foo(this);
     $scan_Foo(this);
+    freeList = NULL;
     $collectWhite_Foo(this);
+    collectFreeList();
   }
 }
 void $markGray_Foo(struct Foo* this) {
@@ -85,7 +103,9 @@ void $collectWhite_Foo(struct Foo* this) {
     case Baz_tag:
       break;
     }
-    free(this);
+    struct FreeCell *curr = freeList;
+    freeList = (void *) this;
+    freeList->next = curr;
   }
 }
 char* fn$foo(struct Foo* param) {

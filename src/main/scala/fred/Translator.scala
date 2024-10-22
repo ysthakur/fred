@@ -15,6 +15,22 @@ object Translator {
                                    |#include <stdio.h>
                                    |
                                    |enum Color { $Black, $Gray, $White };
+                                   |
+                                   |struct FreeCell {
+                                   |  int rc;
+                                   |  enum Color color;
+                                   |  struct FreeCell *next;
+                                   |};
+                                   |
+                                   |struct FreeCell *freeList = NULL;
+                                   |
+                                   |void collectFreeList() {
+                                   |  while (freeList != NULL) {
+                                   |    struct FreeCell *next = freeList->next;
+                                   |    free(freeList);
+                                   |    freeList = next;
+                                   |  }
+                                   |}
                                    |""".stripMargin
 
   private val NoMangleFns = Set("main", "printf")
@@ -79,7 +95,9 @@ object Translator {
           |} else {
           |  ${MarkGray.name(typ)}($This);
           |  ${Scan.name(typ)}($This);
+          |  freeList = NULL;
           |  ${CollectWhite.name(typ)}($This);
+          |  collectFreeList();
           |}""".stripMargin
     }
   }
@@ -184,7 +202,9 @@ object Translator {
       s"""|if ($This->$ColorField == $White) {
           |  $This->$ColorField = $Black;
           |$rec
-          |  free($This);
+          |  struct FreeCell *curr = freeList;
+          |  freeList = (void *) $This;
+          |  freeList->next = curr;
           |}""".stripMargin
     }
   }
@@ -382,9 +402,17 @@ object Translator {
           ("", mangledVars.getOrElse(bindings.vars(name), name), "")
         case SetFieldExpr(obj, field, value, span) =>
           val (valSetup, valTranslated, valTeardown) = exprToC(value)
+          val fieldAccess = s"${obj.value}->${field.value}"
+          val objType = bindings.vars(obj.value).typ.asInstanceOf[TypeDef]
+          val fieldDef =
+            objType.cases.head.fields.find(_.name.value == field.value).get
+          val fieldType = bindings.types(fieldDef.typ.name)
           (
-            valSetup,
-            s"${obj.value}->${field.value} = $valTranslated",
+            s"""|$valSetup
+                |${decrRc(fieldAccess, fieldType)}
+                |$fieldAccess = $valTranslated;
+                |${incrRc(fieldAccess, fieldType)}""".stripMargin,
+            fieldAccess,
             valTeardown
           )
         case BinExpr(lhs, op, rhs, typ) =>

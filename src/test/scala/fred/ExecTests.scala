@@ -53,7 +53,7 @@ class ExecTests extends munit.FunSuite with SnapshotAssertions {
       fn main(): int =
         let a = List { value: 1, next: None {} } in
         let b = List { value: 2, next: Some { value: a } } in
-        set a.next Some { value: b };
+        (set a.next Some { value: b });
         printf("%d\n", a.value + b.value);
         0
       """

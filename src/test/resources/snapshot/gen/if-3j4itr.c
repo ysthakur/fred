@@ -2,6 +2,22 @@
 #include <stdio.h>
 
 enum Color { kBlack, kGray, kWhite };
+
+struct FreeCell {
+  int rc;
+  enum Color color;
+  struct FreeCell *next;
+};
+
+struct FreeCell *freeList = NULL;
+
+void collectFreeList() {
+  while (freeList != NULL) {
+    struct FreeCell *next = freeList->next;
+    free(freeList);
+    freeList = next;
+  }
+}
 char* fn$foo(int bar);
 char* fn$foo(int bar) {
   int g = 3;
