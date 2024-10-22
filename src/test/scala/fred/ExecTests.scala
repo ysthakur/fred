@@ -73,6 +73,10 @@ class ExecTests extends munit.FunSuite with SnapshotAssertions {
 
   test("Contrived example") {
     val code = """
+data CtxRef = CtxRef {
+  ref: Context
+}
+
 data Context = Context {
   name: str,
   mut files: FileList
@@ -109,11 +113,12 @@ fn addExpr(file: File, expr: Expr): int =
   0
 
 fn main(): int =
-  let ctx = Context { name: "foo", files: FileNil {} } in
+  let ctx = CtxRef { ref: Context { name: "foo", files: FileNil {} } } in
   let file = File { exprs: ExprNil {} } in
-  addFile(ctx, file);
+  addFile(ctx.ref, file);
   (let expr = Expr { file: file } in
   addExpr(file, expr);
+  set ctx.ref Context { name: "other context", files: FileNil {} };
   0)
       """
     val compiled = Compiler.compile(code, Paths.get("foo.c"), "a.out")

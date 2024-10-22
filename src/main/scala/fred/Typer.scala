@@ -168,6 +168,7 @@ object Typer {
       case FnCall(Spanned(name, nameSpan), args, _, _, span) =>
         file.fns.find(_.name.value == name) match {
           case Some(fn) =>
+            // todo type check args
             for (arg <- args) {
               resolveExprType(arg, bindings, types)
             }
@@ -176,6 +177,22 @@ object Typer {
             typ
           case None =>
             if (name == "printf") {
+              if (args.isEmpty) {
+                throw new CompileError(
+                  "printf needs at least one argument",
+                  span
+                )
+              }
+              val fmtStrType = resolveExprType(args.head, bindings, types)
+              if (fmtStrType != BuiltinType.Str) {
+                throw new CompileError(
+                  s"printf's format string must be a string, got ${fmtStrType.name}",
+                  args.head.span
+                )
+              }
+              for (arg <- args.tail) {
+                resolveExprType(arg, bindings, types)
+              }
               types.put(expr, BuiltinType.Int)
               BuiltinType.Int
             } else {
