@@ -44,6 +44,16 @@ class TyperTests extends munit.FunSuite with SnapshotAssertions {
     }
   }
 
+  test("Function argument typechecking") {
+    val parsed = Parser.parse("""
+      fn foo(x: int): int = x
+      fn bar(): int = foo("not int")
+      """)
+    intercept[CompileError] {
+      Typer.resolveAllTypes(parsed)
+    }
+  }
+
   test("Ensuring all branches of a match expression are the same") {
     val parsed = Parser.parse("""
       data Foo

@@ -169,9 +169,23 @@ object Typer {
         file.fns.find(_.name.value == name) match {
           case Some(fn) =>
             // todo type check args
-            for (arg <- args) {
-              resolveExprType(arg, bindings, types)
+            if (fn.params.size != args.size) {
+              throw new CompileError(
+                s"Expected ${fn.params.size} arguments, got ${args.size}",
+                span
+              )
             }
+            for ((param, arg) <- fn.params.zip(args)) {
+              val paramType = bindings.getType(param.typ)
+              val argType = resolveExprType(arg, bindings, types)
+              if (paramType != argType) {
+                throw new CompileError(
+                  s"Expected $paramType, got $argType",
+                  arg.span
+                )
+              }
+            }
+
             val typ = bindings.getType(fn.returnType)
             types.put(expr, typ)
             typ
@@ -183,15 +197,13 @@ object Typer {
                   span
                 )
               }
-              val fmtStrType = resolveExprType(args.head, bindings, types)
+              val argTypes = args.map(resolveExprType(_, bindings, types))
+              val fmtStrType = argTypes.head
               if (fmtStrType != BuiltinType.Str) {
                 throw new CompileError(
                   s"printf's format string must be a string, got ${fmtStrType.name}",
                   args.head.span
                 )
-              }
-              for (arg <- args.tail) {
-                resolveExprType(arg, bindings, types)
               }
               types.put(expr, BuiltinType.Int)
               BuiltinType.Int
