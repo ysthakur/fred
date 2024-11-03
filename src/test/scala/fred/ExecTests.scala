@@ -9,6 +9,23 @@ import scala.sys.process.*
 import java.nio.file.Paths
 
 class ExecTests extends munit.FunSuite with SnapshotAssertions {
+  def valgrindCheck(expected: String) = {
+    val stderrBuf = StringBuilder()
+    val stdout =
+      try {
+        "valgrind --leak-check=full --show-leak-kinds=all -s ./a.out" !! ProcessLogger(
+          _ => {},
+          err => stderrBuf.append('\n').append(err)
+        )
+      } catch {
+        case e: RuntimeException =>
+          throw RuntimeException(stderrBuf.toString, e)
+      }
+    assertNoDiff(expected, stdout)
+    val valgrindOut = stderrBuf.toString
+    assert(valgrindOut.contains("ERROR SUMMARY: 0 errors"), valgrindOut)
+  }
+
   test("Basic main function") {
     val code = """
       data List
@@ -31,16 +48,7 @@ class ExecTests extends munit.FunSuite with SnapshotAssertions {
       """
     val compiled = Compiler.compile(code, Paths.get("foo.c"), "a.out")
 
-    val valgrindOutBuf = StringBuilder()
-    assertNoDiff(
-      "7",
-      "valgrind -s --leak-check=yes ./a.out" !! ProcessLogger(
-        _ => {},
-        err => valgrindOutBuf.append('\n').append(err)
-      )
-    )
-    val valgrindOut = valgrindOutBuf.toString
-    assert(valgrindOut.contains("ERROR SUMMARY: 0 errors"), valgrindOut)
+    valgrindCheck("7")
   }
 
   test("Basic cycle") {
@@ -59,16 +67,7 @@ class ExecTests extends munit.FunSuite with SnapshotAssertions {
       """
     val compiled = Compiler.compile(code, Paths.get("foo.c"), "a.out")
 
-    val valgrindOutBuf = StringBuilder()
-    assertNoDiff(
-      "3",
-      "valgrind -s --leak-check=yes ./a.out" !! ProcessLogger(
-        _ => {},
-        err => valgrindOutBuf.append('\n').append(err)
-      )
-    )
-    val valgrindOut = valgrindOutBuf.toString
-    assert(valgrindOut.contains("ERROR SUMMARY: 0 errors"), valgrindOut)
+    valgrindCheck("3")
   }
 
   test("Contrived example") {
@@ -124,14 +123,6 @@ fn main(): int =
     val compiled = Compiler.compile(code, Paths.get("foo.c"), "a.out")
 
     val valgrindOutBuf = StringBuilder()
-    assertNoDiff(
-      "",
-      "valgrind -s --leak-check=yes ./a.out" !! ProcessLogger(
-        _ => {},
-        err => valgrindOutBuf.append('\n').append(err)
-      )
-    )
-    val valgrindOut = valgrindOutBuf.toString
-    assert(valgrindOut.contains("ERROR SUMMARY: 0 errors"), valgrindOut)
+    valgrindCheck("")
   }
 }

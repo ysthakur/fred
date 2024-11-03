@@ -11,27 +11,110 @@ object Translator {
   private val Gray = "kGray"
   private val White = "kWhite"
   private val ColorField = "color"
-  private val CommonIncludes = s"""|#include <stdlib.h>
-                                   |#include <stdio.h>
-                                   |
-                                   |enum Color { $Black, $Gray, $White };
-                                   |
-                                   |struct FreeCell {
-                                   |  int rc;
-                                   |  enum Color color;
-                                   |  struct FreeCell *next;
-                                   |};
-                                   |
-                                   |struct FreeCell *freeList = NULL;
-                                   |
-                                   |void collectFreeList() {
-                                   |  while (freeList != NULL) {
-                                   |    struct FreeCell *next = freeList->next;
-                                   |    free(freeList);
-                                   |    freeList = next;
-                                   |  }
-                                   |}
-                                   |""".stripMargin
+
+  /** Name of the type for potential cyclic roots */
+  private val PCR = "PCR"
+
+  /** Name of the type for nodes in the free list */
+  private val FreeCell = "FreeCell"
+
+  /** Header as in the stuff that's at the top of the file, not as in .h files
+    */
+  private val CommonHeaderCode =
+    s"""|#include <stdlib.h>
+        |#include <stdio.h>
+        |
+        |enum Color { $Black, $Gray, $White };
+        |
+        |struct PCR {
+        |  void *obj;
+        |  void (*markGray)(void *);
+        |  void (*scan)(void *);
+        |  void (*collectWhite)(void *);
+        |  struct PCR *next;
+        |};
+        |
+        |struct $FreeCell {
+        |  int rc;
+        |  enum Color color;
+        |  struct $FreeCell *next;
+        |};
+        |
+        |struct PCR *pcrs;
+        |struct $FreeCell *freeList = NULL;
+        |
+        |void addPCR(
+        |    void *obj,
+        |    void (*markGray)(void *),
+        |    void (*scan)(void *),
+        |    void (*collectWhite)(void *)
+        |) {
+        |  for (struct PCR* head = pcrs; head != NULL; head = head->next) {
+        |    if (head->obj == obj) return;
+        |  }
+        |  struct PCR *pcr = malloc(sizeof(struct PCR));
+        |  pcr->obj = obj;
+        |  pcr->markGray = markGray;
+        |  pcr->scan = scan;
+        |  pcr->collectWhite = collectWhite;
+        |  pcr->next = pcrs;
+        |  pcrs = pcr;
+        |}
+        |
+        |void removePCR(void *obj) {
+        |  struct PCR *head = pcrs;
+        |  struct PCR **prev = &pcrs;
+        |  while (head != NULL) {
+        |    if (head->obj == obj) {
+        |      *prev = head->next;
+        |      free(head);
+        |      head = *prev;
+        |      break;
+        |    } else {
+        |      prev = &head->next;
+        |      head = head->next;
+        |    }
+        |  }
+        |}
+        |
+        |void markGrayAllPCRs(struct PCR *head) {
+        |  if (head == NULL) return;
+        |  struct PCR *next = head->next;
+        |  head->markGray(head->obj);
+        |  markGrayAllPCRs(next);
+        |}
+        |
+        |void scanAllPCRs(struct PCR *head) {
+        |  if (head == NULL) return;
+        |  struct PCR *next = head->next;
+        |  head->scan(head->obj);
+        |  scanAllPCRs(next);
+        |}
+        |
+        |void collectWhiteAllPCRs(struct PCR *head) {
+        |  if (head == NULL) return;
+        |  struct PCR *next = head->next;
+        |  head->collectWhite(head->obj);
+        |  free(head);
+        |  collectWhiteAllPCRs(next);
+        |}
+        |
+        |void collectFreeList() {
+        |  while (freeList != NULL) {
+        |    struct $FreeCell *next = freeList->next;
+        |    free(freeList);
+        |    freeList = next;
+        |  }
+        |}
+        |
+        |void processAllPCRs() {
+        |  markGrayAllPCRs(pcrs);
+        |  scanAllPCRs(pcrs);
+        |  freeList = NULL;
+        |  collectWhiteAllPCRs(pcrs);
+        |  collectFreeList();
+        |}
+        |""".stripMargin
 
   private val NoMangleFns = Set("main", "printf")
 
@@ -49,7 +132,7 @@ object Translator {
         + fnDecls.mkString("", "\n", "\n")
         + genImpls.mkString("", "\n", "\n")
         + fnImpls.mkString("", "\n", "\n")
-    CommonIncludes + generated
+    CommonHeaderCode + generated
       .replaceAll(raw"\n(\s|\n)*\n", "\n")
       .strip() + "\n"
   }
@@ -91,13 +174,14 @@ object Translator {
 
       s"""|if (--$This->$RcField == 0) {
           |$deleteCases
+          |  removePCR($This);
           |  free($This);
           |} else {
-          |  ${MarkGray.name(typ)}($This);
-          |  ${Scan.name(typ)}($This);
-          |  freeList = NULL;
-          |  ${CollectWhite.name(typ)}($This);
-          |  collectFreeList();
+          |  addPCR(
+          |    $This,
+          |    (void *) ${MarkGray.name(typ)},
+          |    (void *) ${Scan.name(typ)},
+          |    (void *) ${CollectWhite.name(typ)});
           |}""".stripMargin
     }
   }
@@ -202,7 +286,7 @@ object Translator {
       s"""|if ($This->$ColorField == $White) {
           |  $This->$ColorField = $Black;
           |$rec
-          |  struct FreeCell *curr = freeList;
+          |  struct $FreeCell *curr = freeList;
           |  freeList = (void *) $This;
           |  freeList->next = curr;
           |}""".stripMargin
@@ -372,6 +456,9 @@ object Translator {
 
       val signature = s"$typeToC ${mangleFnName(fn.name.value)}($params)"
 
+      val triggerGC =
+        if (fn.name.value == "main") indent(1)("processAllPCRs();") else ""
+
       val decl = s"$signature;"
       val impl = s"""|$signature {
                      |${indent(1)(paramsSetup)}
@@ -379,6 +466,7 @@ object Translator {
                      |  $typeToC $resVar = $body;
                      |${indent(1)(bodyTeardown)}
                      |${indent(1)(paramsTeardown)}
+                     |$triggerGC
                      |  return $resVar;
                      |}""".stripMargin
       (decl, impl)

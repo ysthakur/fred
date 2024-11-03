@@ -3,13 +3,78 @@
 
 enum Color { kBlack, kGray, kWhite };
 
+struct PCR {
+  void *obj;
+  void (*markGray)(void *);
+  void (*scan)(void *);
+  void (*collectWhite)(void *);
+  struct PCR *next;
+};
+
 struct FreeCell {
   int rc;
   enum Color color;
   struct FreeCell *next;
 };
 
+struct PCR *pcrs;
 struct FreeCell *freeList = NULL;
+
+void addPCR(
+    void *obj,
+    void (*markGray)(void *),
+    void (*scan)(void *),
+    void (*collectWhite)(void *)
+) {
+  for (struct PCR* head = pcrs; head != NULL; head = head->next) {
+    if (head->obj == obj) return;
+  }
+  struct PCR *pcr = malloc(sizeof(struct PCR));
+  pcr->obj = obj;
+  pcr->markGray = markGray;
+  pcr->scan = scan;
+  pcr->collectWhite = collectWhite;
+  pcr->next = pcrs;
+  pcrs = pcr;
+}
+
+void removePCR(void *obj) {
+  struct PCR *head = pcrs;
+  struct PCR **prev = &pcrs;
+  while (head != NULL) {
+    if (head->obj == obj) {
+      *prev = head->next;
+      free(head);
+      head = *prev;
+      break;
+    } else {
+      prev = &head->next;
+      head = head->next;
+    }
+  }
+}
+
+void markGrayAllPCRs(struct PCR *head) {
+  if (head == NULL) return;
+  struct PCR *next = head->next;
+  head->markGray(head->obj);
+  markGrayAllPCRs(next);
+}
+
+void scanAllPCRs(struct PCR *head) {
+  if (head == NULL) return;
+  struct PCR *next = head->next;
+  head->scan(head->obj);
+  scanAllPCRs(next);
+}
+
+void collectWhiteAllPCRs(struct PCR *head) {
+  if (head == NULL) return;
+  struct PCR *next = head->next;
+  head->collectWhite(head->obj);
+  free(head);
+  collectWhiteAllPCRs(next);
+}
 
 void collectFreeList() {
   while (freeList != NULL) {
@@ -17,6 +82,14 @@ void collectFreeList() {
     free(freeList);
     freeList = next;
   }
+}
+
+void processAllPCRs() {
+  markGrayAllPCRs(pcrs);
+  scanAllPCRs(pcrs);
+  freeList = NULL;
+  collectWhiteAllPCRs(pcrs);
+  collectFreeList();
 }
 enum Foo_kind { Bar_tag, Baz_tag };
 struct Foo {
@@ -44,13 +117,14 @@ void $decr_Foo(struct Foo* this) {
     case Baz_tag:
       break;
     }
+    removePCR(this);
     free(this);
   } else {
-    $markGray_Foo(this);
-    $scan_Foo(this);
-    freeList = NULL;
-    $collectWhite_Foo(this);
-    collectFreeList();
+    addPCR(
+      this,
+      (void *) $markGray_Foo,
+      (void *) $scan_Foo,
+      (void *) $collectWhite_Foo);
   }
 }
 void $markGray_Foo(struct Foo* this) {
