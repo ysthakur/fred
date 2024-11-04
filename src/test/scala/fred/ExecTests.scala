@@ -1,7 +1,5 @@
 package fred
 
-package fred
-
 import snapshot4s.munit.SnapshotAssertions
 import snapshot4s.generated.snapshotConfig
 
