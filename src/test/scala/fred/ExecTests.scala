@@ -9,7 +9,15 @@ import scala.sys.process.*
 import java.nio.file.Paths
 
 class ExecTests extends munit.FunSuite with SnapshotAssertions {
-  def valgrindCheck(expected: String) = {
+  def valgrindCheck(code: String, outFile: String)(expected: String) = {
+    val parsedFile = Parser.parse(code)
+    given typer: Typer = Typer.resolveAllTypes(parsedFile)
+    val generatedC = Translator.toC(parsedFile)
+
+    assertFileSnapshot(generatedC, s"exec/$outFile")
+
+    s"gcc -g src/test/resources/snapshot/exec/$outFile".!!
+
     val stderrBuf = StringBuilder()
     val stdout =
       try {
@@ -46,9 +54,8 @@ class ExecTests extends munit.FunSuite with SnapshotAssertions {
         printf("%d\n", sum(list));
         0
       """
-    val compiled = Compiler.compile(code, Paths.get("foo.c"), "a.out")
 
-    valgrindCheck("7")
+    valgrindCheck(code, "basic-main.c")("7")
   }
 
   test("Basic cycle") {
@@ -65,64 +72,61 @@ class ExecTests extends munit.FunSuite with SnapshotAssertions {
         printf("%d\n", a.value + b.value);
         0
       """
-    val compiled = Compiler.compile(code, Paths.get("foo.c"), "a.out")
 
-    valgrindCheck("3")
+    valgrindCheck(code, "basic-cycle.c")("3")
   }
 
   test("Contrived example") {
     val code = """
-data CtxRef = CtxRef {
-  ref: Context
-}
+      data CtxRef = CtxRef {
+        ref: Context
+      }
 
-data Context = Context {
-  name: str,
-  mut files: FileList
-}
+      data Context = Context {
+        name: str,
+        mut files: FileList
+      }
 
-data FileList
-  = FileNil {}
-  | FileCons {
-    ctx: Context,
-    head: File,
-    tail: FileList
-  }
+      data FileList
+        = FileNil {}
+        | FileCons {
+          ctx: Context,
+          head: File,
+          tail: FileList
+        }
 
-data File = File {
-  mut exprs: ExprList
-}
+      data File = File {
+        mut exprs: ExprList
+      }
 
-data ExprList
-  = ExprNil {}
-  | ExprCons {
-    head: Expr,
-    tail: ExprList
-  }
+      data ExprList
+        = ExprNil {}
+        | ExprCons {
+          head: Expr,
+          tail: ExprList
+        }
 
-data Expr = Expr {
-  file: File
-}
+      data Expr = Expr {
+        file: File
+      }
 
-fn addFile(ctx: Context, file: File): int =
-  set ctx.files FileCons { ctx: ctx, head: file, tail: ctx.files };
-  0
-fn addExpr(file: File, expr: Expr): int =
-  set file.exprs ExprCons { head: expr, tail: file.exprs };
-  0
+      fn addFile(ctx: Context, file: File): int =
+        set ctx.files FileCons { ctx: ctx, head: file, tail: ctx.files };
+        0
+      fn addExpr(file: File, expr: Expr): int =
+        set file.exprs ExprCons { head: expr, tail: file.exprs };
+        0
 
-fn main(): int =
-  let ctx = CtxRef { ref: Context { name: "foo", files: FileNil {} } } in
-  let file = File { exprs: ExprNil {} } in
-  addFile(ctx.ref, file);
-  (let expr = Expr { file: file } in
-  addExpr(file, expr);
-  set ctx.ref Context { name: "other context", files: FileNil {} };
-  0)
+      fn main(): int =
+        let ctx = CtxRef { ref: Context { name: "foo", files: FileNil {} } } in
+        let file = File { exprs: ExprNil {} } in
+        addFile(ctx.ref, file);
+        (let expr = Expr { file: file } in
+        addExpr(file, expr);
+        set ctx.ref Context { name: "other context", files: FileNil {} };
+        0)
       """
-    val compiled = Compiler.compile(code, Paths.get("foo.c"), "a.out")
 
-    val valgrindOutBuf = StringBuilder()
-    valgrindCheck("")
+    valgrindCheck(code, "contrived.c")("")
   }
 }
