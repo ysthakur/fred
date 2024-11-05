@@ -1,1 +1,0 @@
-List(Set("B", "A"), Set("C"), Set("D", "F", "E"))

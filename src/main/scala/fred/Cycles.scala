@@ -2,10 +2,42 @@ package fred
 
 import scala.collection.mutable
 
-/** Finds strongly-connected components in the graph of types using Tarjan's
-  * algorithm
-  */
-object SCC {
+object Cycles {
+
+  /** Whether there are any mutable references within the given SCC to another
+    * type within the same SCC
+    */
+  def isBadSCC(
+      scc: Set[TypeDef],
+      file: ParsedFile,
+      sccMap: Map[TypeDef, Int]
+  ): Boolean = {
+    given bindings: Bindings = Bindings.fromFile(file)
+    scc.exists { typ =>
+      val fields = typ.cases.flatMap(_.fields)
+      fields.exists { field =>
+        bindings.getType(field.typ) match {
+          case neighbor: TypeDef =>
+            field.mutable && sccMap(neighbor) == sccMap(typ)
+          case _ => false
+        }
+      }
+    }
+  }
+
+  /** Map each type to the index of the SCC it occurs in
+    *
+    * SCCs can be obtained using [[findSCCs]]
+    */
+  def sccMap(sccs: List[Set[TypeDef]]): Map[TypeDef, Int] = {
+    sccs.zipWithIndex.flatMap { (types, i) =>
+      types.map(_ -> i)
+    }.toMap
+  }
+
+  /** Get a list of SCCs, sorted topologically. Uses Tarjan's strongly-connected
+    * component algorithm
+    */
   def findSCCs(file: ParsedFile): List[Set[TypeDef]] = {
     given bindings: Bindings = Bindings.fromFile(file)
 

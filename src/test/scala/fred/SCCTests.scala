@@ -4,13 +4,15 @@ import snapshot4s.munit.SnapshotAssertions
 import snapshot4s.generated.snapshotConfig
 
 class SCCTests extends munit.FunSuite with SnapshotAssertions {
-  def createFile(graph: Map[String, Set[String]]): ParsedFile = {
+
+  /** This is just a helper to avoid typing out calls to the TypeDef ctor */
+  def createFile(graph: Map[String, Set[(Boolean, String)]]): ParsedFile = {
     ParsedFile(
       graph.map { (name, neighbors) =>
         val spannedName = Spanned(name, Span.synthetic)
-        val fields = graph(name).toList.map { neighborName =>
+        val fields = graph(name).toList.map { (mutable, neighborName) =>
           FieldDef(
-            false,
+            mutable,
             Spanned(s"field$neighborName", Span.synthetic),
             TypeRef(neighborName, Span.synthetic),
             Span.synthetic
@@ -28,12 +30,16 @@ class SCCTests extends munit.FunSuite with SnapshotAssertions {
     )
   }
 
+  def createFileImmutable(graph: Map[String, Set[String]]): ParsedFile = {
+    createFile(graph.mapValues(_.map(false -> _)).toMap)
+  }
+
   def simplifySCCs(sccs: List[Set[TypeDef]]): List[Set[String]] = {
     sccs.map(_.map(_.name))
   }
 
   test("Basic SCCs") {
-    val file = createFile(
+    val file = createFileImmutable(
       Map(
         "A" -> Set("B", "C"),
         "B" -> Set("A"),
@@ -44,14 +50,14 @@ class SCCTests extends munit.FunSuite with SnapshotAssertions {
       )
     )
 
-    assertFileSnapshot(
-      pprint.apply(simplifySCCs(SCC.findSCCs(file))).plainText,
-      "scc/basic-fjw38es.scala"
+    assertEquals(
+      List(Set("B", "A"), Set("C"), Set("D", "F", "E")),
+      simplifySCCs(Cycles.findSCCs(file))
     )
   }
 
   test("Multiple SCCs at same level") {
-    val file = createFile(
+    val file = createFileImmutable(
       Map(
         "A" -> Set("B", "C", "D", "E"),
         "B" -> Set(),
@@ -63,9 +69,45 @@ class SCCTests extends munit.FunSuite with SnapshotAssertions {
       )
     )
 
-    assertFileSnapshot(
-      pprint.apply(simplifySCCs(SCC.findSCCs(file))).plainText,
-      "scc/basic-jasi893.scala"
+    assertEquals(
+      List(Set("A"), Set("D"), Set("C"), Set("G"), Set("B"), Set("F", "E")),
+      simplifySCCs(Cycles.findSCCs(file))
     )
+  }
+
+  test("Is basic bad SCC detected") {
+    val file = createFile(
+      Map(
+        "A" -> Set((true, "B")),
+        "B" -> Set((false, "C")),
+        "C" -> Set((false, "A"))
+      )
+    )
+
+    val sccs = Cycles.findSCCs(file)
+    val sccMap = Cycles.sccMap(sccs)
+    for (scc <- sccs) {
+      assert(Cycles.isBadSCC(scc, file, sccMap))
+    }
+  }
+
+  test("Is basic good SCC not incorrectly marked bad") {
+    val file = createFileImmutable(
+      Map(
+        "A" -> Set("B", "C", "D", "E"),
+        "B" -> Set(),
+        "C" -> Set("G"),
+        "D" -> Set("G"),
+        "E" -> Set("F"),
+        "F" -> Set("E"),
+        "G" -> Set("D")
+      )
+    )
+
+    val sccs = Cycles.findSCCs(file)
+    val sccMap = Cycles.sccMap(sccs)
+    for (scc <- sccs) {
+      assert(!Cycles.isBadSCC(scc, file, sccMap))
+    }
   }
 }
