@@ -49,4 +49,23 @@ class SCCTests extends munit.FunSuite with SnapshotAssertions {
       "scc/basic-fjw38es.scala"
     )
   }
+
+  test("Multiple SCCs at same level") {
+    val file = createFile(
+      Map(
+        "A" -> Set("B", "C", "D", "E"),
+        "B" -> Set(),
+        "C" -> Set("G"),
+        "D" -> Set("G"),
+        "E" -> Set("F"),
+        "F" -> Set("E"),
+        "G" -> Set()
+      )
+    )
+
+    assertFileSnapshot(
+      pprint.apply(simplifySCCs(SCC.findSCCs(file))).plainText,
+      "scc/basic-jasi893.scala"
+    )
+  }
 }

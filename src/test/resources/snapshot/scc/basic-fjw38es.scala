@@ -1,1 +1,1 @@
-List(Set("D", "F", "E"), Set("C"), Set("B", "A"))
+List(Set("B", "A"), Set("C"), Set("D", "F", "E"))

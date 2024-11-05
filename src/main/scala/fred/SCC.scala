@@ -58,7 +58,7 @@ object SCC {
       }
     }
 
-    sccs.toList
+    sccs.toList.reverse
   }
 
   private def outNeighbors(

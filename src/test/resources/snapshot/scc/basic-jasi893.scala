@@ -1,0 +1,1 @@
+List(Set("A"), Set("D"), Set("C"), Set("G"), Set("B"), Set("F", "E"))
