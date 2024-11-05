@@ -40,7 +40,7 @@ class SCCTests extends munit.FunSuite with SnapshotAssertions {
         "C" -> Set("D"),
         "D" -> Set("E"),
         "E" -> Set("F"),
-        "F" -> Set()
+        "F" -> Set("D")
       )
     )
 

@@ -1,1 +1,1 @@
-List(Set("F"), HashSet("E", "A", "B", "C", "D"))
+List(Set("D", "F", "E"), Set("C"), Set("B", "A"))

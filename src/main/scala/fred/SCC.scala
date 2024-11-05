@@ -2,56 +2,63 @@ package fred
 
 import scala.collection.mutable
 
-/** Finds strongly-connected components in the graph of types using Kosaraju's
+/** Finds strongly-connected components in the graph of types using Tarjan's
   * algorithm
   */
 object SCC {
   def findSCCs(file: ParsedFile): List[Set[TypeDef]] = {
     given bindings: Bindings = Bindings.fromFile(file)
-    val visited = mutable.Set.empty[TypeDef]
-    def visit(types: List[TypeDef]): List[TypeDef] = {
-      types.flatMap { typ =>
-        if (visited(typ)) {
-          Nil
-        } else {
-          visited += typ
-          typ :: visit(outNeighbors(typ))
+
+    var ind = 0
+    val indexOf = mutable.Map.empty[TypeDef, Int]
+    val lowlink = mutable.Map.empty[TypeDef, Int]
+    val onStack = mutable.Set.empty[TypeDef]
+    val S = mutable.ListBuffer.empty[TypeDef]
+
+    val sccs = mutable.ListBuffer.empty[Set[TypeDef]]
+
+    def strongConnect(v: TypeDef): Unit = {
+      indexOf(v) = ind
+      lowlink(v) = ind
+      ind += 1
+      S.prepend(v)
+      onStack += v
+
+      for (w <- outNeighbors(v)) {
+        if (!indexOf.contains(w)) {
+          // Successor w has not yet been visited; recurse on it
+          strongConnect(w)
+          lowlink(v) = lowlink(v).min(lowlink(w))
+        } else if (onStack(w)) {
+          // Successor w is in stack S and hence in the current SCC
+          // If w is not on stack, then (v, w) is an edge pointing to an SCC already found and must be ignored
+          // See below regarding the next line
+          lowlink(v) = lowlink(v).min(indexOf(w))
         }
+      }
+
+      if (lowlink(v) == indexOf(v)) {
+        val scc = mutable.ListBuffer.empty[TypeDef]
+
+        while {
+          val w = S.remove(0)
+          onStack.remove(w)
+          scc += w
+
+          w != v
+        } do {}
+
+        sccs += scc.toSet
       }
     }
 
-    println(file.typeDefs.map(_.name))
-    val L = visit(file.typeDefs)
-    println(L.map(_.name))
-
-    val inNeighbors = file.typeDefs.map(_ -> Set.empty[TypeDef]).to(mutable.Map)
     for (typ <- file.typeDefs) {
-      for (neighbor <- outNeighbors(typ)) {
-        inNeighbors(neighbor) += typ
+      if (!indexOf.contains(typ)) {
+        strongConnect(typ)
       }
     }
 
-    val componentFor = mutable.Map.empty[TypeDef, TypeDef]
-    def assign(typ: TypeDef, root: TypeDef): Unit = {
-      if (!componentFor.contains(typ)) {
-        componentFor(typ) = root
-        println(componentFor.map((td, root) => (td.name, root.name)))
-        for (neighbor <- inNeighbors(typ)) {
-          assign(neighbor, root)
-        }
-      }
-    }
-
-    for (typ <- L) {
-      assign(typ, typ)
-    }
-
-    // These SCCs aren't sorted
-    val sccs = file.typeDefs.groupBy(componentFor).values.toList.map(_.toSet)
-
-    // todo sort these
-
-    sccs
+    sccs.toList
   }
 
   private def outNeighbors(
