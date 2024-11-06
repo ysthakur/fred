@@ -6,6 +6,7 @@ import scala.collection.mutable
 object Translator {
   private val KindField = "kind"
   private val RcField = "rc"
+  private val SccField = "scc"
   private val This = "this"
   private val Black = "kBlack"
   private val Gray = "kGray"
@@ -120,6 +121,8 @@ object Translator {
 
   def toC(file: ParsedFile)(using typer: Typer): String = {
     given Bindings = Bindings.fromFile(file)
+    val sccs = Cycles.findSCCs(file)
+    val sccMap = Cycles.sccMap(sccs)
     val helper = Helper(typer)
     val (genDecls, genImpls) =
       List(Decrementer, MarkGray, Scan, ScanBlack, CollectWhite)

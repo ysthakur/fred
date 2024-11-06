@@ -4,25 +4,28 @@ import scala.collection.mutable
 
 object Cycles {
 
-  /** Whether there are any mutable references within the given SCC to another
-    * type within the same SCC
+  /** Find SCCs where there is at least one mutable reference within that SCC to
+    * another type within the same SCC
     */
-  def isBadSCC(
-      scc: Set[TypeDef],
-      file: ParsedFile,
-      sccMap: Map[TypeDef, Int]
-  ): Boolean = {
+  def badSCCs(
+      sccs: List[Set[TypeDef]],
+      file: ParsedFile
+  ): List[Int] = {
     given bindings: Bindings = Bindings.fromFile(file)
-    scc.exists { typ =>
-      val fields = typ.cases.flatMap(_.fields)
-      fields.exists { field =>
-        bindings.getType(field.typ) match {
-          case neighbor: TypeDef =>
-            field.mutable && sccMap(neighbor) == sccMap(typ)
-          case _ => false
+    sccs.zipWithIndex
+      .filter { (scc, i) =>
+        scc.exists { typ =>
+          val fields = typ.cases.flatMap(_.fields)
+          fields.exists { field =>
+            bindings.getType(field.typ) match {
+              case neighbor: TypeDef =>
+                field.mutable && scc(neighbor)
+              case _ => false
+            }
+          }
         }
       }
-    }
+      .map(_._2)
   }
 
   /** Map each type to the index of the SCC it occurs in
