@@ -52,7 +52,7 @@ class SCCTests extends munit.FunSuite with SnapshotAssertions {
 
     assertEquals(
       List(Set("B", "A"), Set("C"), Set("D", "F", "E")),
-      simplifySCCs(Cycles.findSCCs(file))
+      simplifySCCs(Cycles.fromFile(file).sccs)
     )
   }
 
@@ -71,7 +71,7 @@ class SCCTests extends munit.FunSuite with SnapshotAssertions {
 
     assertEquals(
       List(Set("A"), Set("D"), Set("C"), Set("G"), Set("B"), Set("F", "E")),
-      simplifySCCs(Cycles.findSCCs(file))
+      simplifySCCs(Cycles.fromFile(file).sccs)
     )
   }
 
@@ -84,9 +84,9 @@ class SCCTests extends munit.FunSuite with SnapshotAssertions {
       )
     )
 
-    val sccs = Cycles.findSCCs(file)
-    assertEquals(sccs.size, 1)
-    assertEquals(Cycles.badSCCs(sccs, file), List(0))
+    val cycles = Cycles.fromFile(file)
+    assertEquals(cycles.sccs.size, 1)
+    assertEquals(cycles.badSCCs, List(0))
   }
 
   test("Is basic good SCC not incorrectly marked bad") {
@@ -102,7 +102,7 @@ class SCCTests extends munit.FunSuite with SnapshotAssertions {
       )
     )
 
-    val sccs = Cycles.findSCCs(file)
-    assert(Cycles.badSCCs(sccs, file).isEmpty)
+    val cycles = Cycles.fromFile(file)
+    assert(cycles.badSCCs.isEmpty)
   }
 }

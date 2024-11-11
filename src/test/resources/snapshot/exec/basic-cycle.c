@@ -94,6 +94,7 @@ void processAllPCRs() {
 enum Option_kind { None_tag, Some_tag };
 struct Option {
   int rc;
+  int scc;
   enum Color color;
   enum Option_kind kind;
   union {
@@ -104,6 +105,7 @@ struct Option {
 enum List_kind { List_tag };
 struct List {
   int rc;
+  int scc;
   enum Color color;
   enum List_kind kind;
   int value;

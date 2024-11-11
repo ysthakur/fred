@@ -94,6 +94,7 @@ void processAllPCRs() {
 enum List_kind { Nil_tag, Cons_tag };
 struct List {
   int rc;
+  int scc;
   enum Color color;
   enum List_kind kind;
   union {

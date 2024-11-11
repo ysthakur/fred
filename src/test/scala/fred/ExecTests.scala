@@ -74,7 +74,10 @@ class ExecTests extends munit.FunSuite with SnapshotAssertions {
     valgrindCheck(code, "basic-cycle.c")("3")
   }
 
-  test("Contrived example") {
+  test("Needs sorting") {
+    // This test case needs the objects to be sorted by SCC. Otherwise, the quadratic
+    // scanning thing will happen
+
     val code = """
       data CtxRef = CtxRef {
         ref: Context
@@ -108,23 +111,17 @@ class ExecTests extends munit.FunSuite with SnapshotAssertions {
         file: File
       }
 
-      fn addFile(ctx: Context, file: File): int =
-        set ctx.files FileCons { ctx: ctx, head: file, tail: ctx.files };
-        0
-      fn addExpr(file: File, expr: Expr): int =
-        set file.exprs ExprCons { head: expr, tail: file.exprs };
-        0
-
       fn main(): int =
         let ctx = CtxRef { ref: Context { name: "foo", files: FileNil {} } } in
-        let file = File { exprs: ExprNil {} } in
-        addFile(ctx.ref, file);
-        (let expr = Expr { file: file } in
-        addExpr(file, expr);
+        (let file = File { exprs: ExprNil {} } in
+          let actualCtx = ctx.ref in
+          set actualCtx.files FileCons { ctx: ctx.ref, head: file, tail: ctx.ref.files };
+          (let expr = Expr { file: file } in
+            set file.exprs ExprCons { head: expr, tail: file.exprs });
         set ctx.ref Context { name: "other context", files: FileNil {} };
         0)
       """
 
-    valgrindCheck(code, "contrived.c")("")
+    valgrindCheck(code, "contrived-needs-sorting.c")("")
   }
 }

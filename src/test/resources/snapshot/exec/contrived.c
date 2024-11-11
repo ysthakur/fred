@@ -299,8 +299,6 @@ void $markGray_CtxRef(struct CtxRef* this) {
   this->color = kGray;
   switch (this->kind) {
   case CtxRef_tag:
-    this->ref->rc --;
-    $markGray_Context(this->ref);
     break;
   }
 }
@@ -323,8 +321,6 @@ void $markGray_FileList(struct FileList* this) {
   case FileCons_tag:
     this->ctx_FileCons->rc --;
     $markGray_Context(this->ctx_FileCons);
-    this->head_FileCons->rc --;
-    $markGray_File(this->head_FileCons);
     this->tail_FileCons->rc --;
     $markGray_FileList(this->tail_FileCons);
     break;
@@ -373,7 +369,6 @@ void $scan_CtxRef(struct CtxRef* this) {
   this->color = kWhite;
   switch (this->kind) {
   case CtxRef_tag:
-    $scan_Context(this->ref);
     break;
   }
 }
@@ -402,7 +397,6 @@ void $scan_FileList(struct FileList* this) {
     break;
   case FileCons_tag:
     $scan_Context(this->ctx_FileCons);
-    $scan_File(this->head_FileCons);
     $scan_FileList(this->tail_FileCons);
     break;
   }
@@ -454,8 +448,6 @@ void $scanBlack_CtxRef(struct CtxRef* this) {
     this->color = kBlack;
     switch (this->kind) {
     case CtxRef_tag:
-      this->ref->rc ++;
-      $scanBlack_Context(this->ref);
       break;
     }
   }
@@ -480,8 +472,6 @@ void $scanBlack_FileList(struct FileList* this) {
     case FileCons_tag:
       this->ctx_FileCons->rc ++;
       $scanBlack_Context(this->ctx_FileCons);
-      this->head_FileCons->rc ++;
-      $scanBlack_File(this->head_FileCons);
       this->tail_FileCons->rc ++;
       $scanBlack_FileList(this->tail_FileCons);
       break;
@@ -530,7 +520,6 @@ void $collectWhite_CtxRef(struct CtxRef* this) {
     this->color = kBlack;
     switch (this->kind) {
     case CtxRef_tag:
-      $collectWhite_Context(this->ref);
       break;
     }
     struct FreeCell *curr = freeList;
@@ -559,7 +548,6 @@ void $collectWhite_FileList(struct FileList* this) {
       break;
     case FileCons_tag:
       $collectWhite_Context(this->ctx_FileCons);
-      $collectWhite_File(this->head_FileCons);
       $collectWhite_FileList(this->tail_FileCons);
       break;
     }

@@ -121,8 +121,7 @@ object Translator {
 
   def toC(file: ParsedFile)(using typer: Typer): String = {
     given Bindings = Bindings.fromFile(file)
-    val sccs = Cycles.findSCCs(file)
-    val sccMap = Cycles.sccMap(sccs)
+    given cycles: Cycles = Cycles.fromFile(file)
     val helper = Helper(typer)
     val (genDecls, genImpls) =
       List(Decrementer, MarkGray, Scan, ScanBlack, CollectWhite)
@@ -143,7 +142,7 @@ object Translator {
   trait GeneratedFn(unmangledName: String) {
     def returnType: String
 
-    def body(typ: TypeDef)(using Bindings): String
+    def body(typ: TypeDef)(using Bindings, Cycles): String
 
     def name(typ: TypeDef) = s"$$${unmangledName}_${typ.name}"
 
@@ -152,7 +151,7 @@ object Translator {
 
     def decl(typ: TypeDef) = s"${sig(typ)};"
 
-    def impl(typ: TypeDef)(using Bindings) =
+    def impl(typ: TypeDef)(using Bindings, Cycles) =
       s"${sig(typ)} {\n${indent(1)(body(typ))}\n}"
   }
 
@@ -161,7 +160,9 @@ object Translator {
   private object Decrementer extends GeneratedFn("decr") {
     override def returnType = "void"
 
-    override def body(typ: TypeDef)(using bindings: Bindings): String = {
+    override def body(
+        typ: TypeDef
+    )(using bindings: Bindings, cycles: Cycles): String = {
       // Cases for deleting the object
       val deleteCases = indent(1) {
         switch(This, typ) {
@@ -192,7 +193,10 @@ object Translator {
   private object MarkGray extends GeneratedFn("markGray") {
     override def returnType: String = "void"
 
-    override def body(typ: TypeDef)(using bindings: Bindings): String = {
+    override def body(
+        typ: TypeDef
+    )(using bindings: Bindings, cycles: Cycles): String = {
+      val myScc = cycles.sccMap(typ)
       val recMarks =
         switch(This, typ) { variant =>
           variant.fields
@@ -200,8 +204,12 @@ object Translator {
               val mangled = cFieldName(fieldName.value, typ, variant)
               bindings.types(fieldTypeRef.name) match {
                 case fieldType: TypeDef =>
-                  s"""|$This->$mangled->$RcField --;
-                      |${MarkGray.name(fieldType)}($This->$mangled);""".stripMargin
+                  if (cycles.sccMap(fieldType) == myScc) {
+                    s"""|$This->$mangled->$RcField --;
+                        |${MarkGray.name(fieldType)}($This->$mangled);""".stripMargin
+                  } else {
+                    ""
+                  }
                 case _ => ""
               }
             }
@@ -217,7 +225,10 @@ object Translator {
   private object Scan extends GeneratedFn("scan") {
     override def returnType: String = "void"
 
-    override def body(typ: TypeDef)(using bindings: Bindings): String = {
+    override def body(
+        typ: TypeDef
+    )(using bindings: Bindings, cycles: Cycles): String = {
+      val myScc = cycles.sccMap(typ)
       val recScan =
         switch(This, typ) { variant =>
           variant.fields
@@ -225,7 +236,9 @@ object Translator {
               val mangled = cFieldName(fieldName.value, typ, variant)
               bindings.types(fieldTypeRef.name) match {
                 case fieldType: TypeDef =>
-                  s"${Scan.name(fieldType)}($This->$mangled);"
+                  if (cycles.sccMap(fieldType) == myScc)
+                    s"${Scan.name(fieldType)}($This->$mangled);"
+                  else ""
                 case _ => ""
               }
             }
@@ -245,7 +258,10 @@ object Translator {
   private object ScanBlack extends GeneratedFn("scanBlack") {
     override def returnType: String = "void"
 
-    override def body(typ: TypeDef)(using bindings: Bindings): String = {
+    override def body(
+        typ: TypeDef
+    )(using bindings: Bindings, cycles: Cycles): String = {
+      val myScc = cycles.sccMap(typ)
       val recScan = indent(1) {
         switch(This, typ) { variant =>
           variant.fields
@@ -253,8 +269,12 @@ object Translator {
               val mangled = cFieldName(fieldName.value, typ, variant)
               bindings.types(fieldTypeRef.name) match {
                 case fieldType: TypeDef =>
-                  s"""|$This->$mangled->$RcField ++;
-                      |${ScanBlack.name(fieldType)}($This->$mangled);""".stripMargin
+                  if (cycles.sccMap(fieldType) == myScc) {
+                    s"""|$This->$mangled->$RcField ++;
+                        |${ScanBlack.name(fieldType)}($This->$mangled);""".stripMargin
+                  } else {
+                    ""
+                  }
                 case _ => ""
               }
             }
@@ -271,7 +291,10 @@ object Translator {
   private object CollectWhite extends GeneratedFn("collectWhite") {
     override def returnType: String = "void"
 
-    override def body(typ: TypeDef)(using bindings: Bindings): String = {
+    override def body(
+        typ: TypeDef
+    )(using bindings: Bindings, cycles: Cycles): String = {
+      val myScc = cycles.sccMap(typ)
       val rec = indent(1) {
         switch(This, typ) { variant =>
           variant.fields
@@ -279,7 +302,9 @@ object Translator {
               val mangled = cFieldName(fieldName.value, typ, variant)
               bindings.types(fieldTypeRef.name) match {
                 case fieldType: TypeDef =>
-                  s"${CollectWhite.name(fieldType)}($This->$mangled);"
+                  if (cycles.sccMap(fieldType) == myScc)
+                    s"${CollectWhite.name(fieldType)}($This->$mangled);"
+                  else ""
                 case _ => ""
               }
             }

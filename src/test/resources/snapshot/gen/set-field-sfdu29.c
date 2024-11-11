@@ -94,6 +94,7 @@ void processAllPCRs() {
 enum Foo_kind { Foo_tag };
 struct Foo {
   int rc;
+  int scc;
   enum Color color;
   enum Foo_kind kind;
   int field;

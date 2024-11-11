@@ -2,17 +2,29 @@ package fred
 
 import scala.collection.mutable
 
-object Cycles {
+/** @param sccs
+  *   A list of SCCs, sorted topologically
+  * @param sccMap
+  *   Map each type to the index of the SCC it occurs in
+  * @param badSCCs
+  *   SCCs where there is at least one mutable reference within that SCC to
+  *   another type within the same SCC
+  */
+case class Cycles(
+    sccs: List[Set[TypeDef]],
+    sccMap: Map[TypeDef, Int],
+    badSCCs: List[Int]
+)
 
-  /** Find SCCs where there is at least one mutable reference within that SCC to
-    * another type within the same SCC
-    */
-  def badSCCs(
-      sccs: List[Set[TypeDef]],
-      file: ParsedFile
-  ): List[Int] = {
+object Cycles {
+  def fromFile(file: ParsedFile): Cycles = {
+    val sccs = findSCCs(file)
+    val sccMap = sccs.zipWithIndex.flatMap { (types, i) =>
+      types.map(_ -> i)
+    }.toMap
+
     given bindings: Bindings = Bindings.fromFile(file)
-    sccs.zipWithIndex
+    val badSCCs = sccs.zipWithIndex
       .filter { (scc, i) =>
         scc.exists { typ =>
           val fields = typ.cases.flatMap(_.fields)
@@ -26,22 +38,14 @@ object Cycles {
         }
       }
       .map(_._2)
-  }
 
-  /** Map each type to the index of the SCC it occurs in
-    *
-    * SCCs can be obtained using [[findSCCs]]
-    */
-  def sccMap(sccs: List[Set[TypeDef]]): Map[TypeDef, Int] = {
-    sccs.zipWithIndex.flatMap { (types, i) =>
-      types.map(_ -> i)
-    }.toMap
+    Cycles(sccs, sccMap, badSCCs)
   }
 
   /** Get a list of SCCs, sorted topologically. Uses Tarjan's strongly-connected
     * component algorithm
     */
-  def findSCCs(file: ParsedFile): List[Set[TypeDef]] = {
+  private def findSCCs(file: ParsedFile): List[Set[TypeDef]] = {
     given bindings: Bindings = Bindings.fromFile(file)
 
     var ind = 0
