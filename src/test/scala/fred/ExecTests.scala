@@ -27,8 +27,8 @@ class ExecTests extends munit.FunSuite with SnapshotAssertions {
         case e: RuntimeException =>
           throw RuntimeException(stderrBuf.toString, e)
       }
-    assertNoDiff(expected, stdout)
     val valgrindOut = stderrBuf.toString
+    assertNoDiff(stdout, expected, valgrindOut)
     assert(valgrindOut.contains("ERROR SUMMARY: 0 errors"), valgrindOut)
   }
 
@@ -76,7 +76,7 @@ class ExecTests extends munit.FunSuite with SnapshotAssertions {
 
   test("Needs sorting") {
     // This test case needs the objects to be sorted by SCC. Otherwise, the quadratic
-    // scanning thing will happen
+    // scanning problem will show up
 
     val code = """
       data CtxRef = CtxRef {

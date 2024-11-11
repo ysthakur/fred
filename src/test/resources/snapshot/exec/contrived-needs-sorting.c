@@ -5,6 +5,7 @@ enum Color { kBlack, kGray, kWhite };
 
 struct PCR {
   void *obj;
+  int scc;
   void (*markGray)(void *);
   void (*scan)(void *);
   void (*collectWhite)(void *);
@@ -22,20 +23,26 @@ struct FreeCell *freeList = NULL;
 
 void addPCR(
     void *obj,
+    int scc,
     void (*markGray)(void *),
     void (*scan)(void *),
     void (*collectWhite)(void *)
 ) {
-  for (struct PCR* head = pcrs; head != NULL; head = head->next) {
-    if (head->obj == obj) return;
+  printf("[addPCR] scc: %d\n", scc);
+  struct PCR **prev = &pcrs;
+  while (*prev != NULL && (*prev)->scc <= scc) {
+    if ((*prev)->obj == obj) return;
+    printf("[addPCR] prev scc: %d\n", (*prev)->scc);
+    prev = &(*prev)->next;
   }
   struct PCR *pcr = malloc(sizeof(struct PCR));
   pcr->obj = obj;
+  pcr->scc = scc;
   pcr->markGray = markGray;
   pcr->scan = scan;
   pcr->collectWhite = collectWhite;
-  pcr->next = pcrs;
-  pcrs = pcr;
+  pcr->next = (*prev == NULL) ? NULL : (*prev)->next;
+  *prev = pcr;
 }
 
 void removePCR(void *obj) {
@@ -182,8 +189,6 @@ void $collectWhite_FileList(struct FileList* this);
 void $collectWhite_File(struct File* this);
 void $collectWhite_ExprList(struct ExprList* this);
 void $collectWhite_Expr(struct Expr* this);
-int fn$addFile(struct Context* ctx, struct File* file);
-int fn$addExpr(struct File* file, struct Expr* expr);
 int main();
 void $decr_CtxRef(struct CtxRef* this) {
   if (--this->rc == 0) {
@@ -197,6 +202,7 @@ void $decr_CtxRef(struct CtxRef* this) {
   } else {
     addPCR(
       this,
+      0,
       (void *) $markGray_CtxRef,
       (void *) $scan_CtxRef,
       (void *) $collectWhite_CtxRef);
@@ -214,6 +220,7 @@ void $decr_Context(struct Context* this) {
   } else {
     addPCR(
       this,
+      1,
       (void *) $markGray_Context,
       (void *) $scan_Context,
       (void *) $collectWhite_Context);
@@ -235,6 +242,7 @@ void $decr_FileList(struct FileList* this) {
   } else {
     addPCR(
       this,
+      1,
       (void *) $markGray_FileList,
       (void *) $scan_FileList,
       (void *) $collectWhite_FileList);
@@ -252,6 +260,7 @@ void $decr_File(struct File* this) {
   } else {
     addPCR(
       this,
+      2,
       (void *) $markGray_File,
       (void *) $scan_File,
       (void *) $collectWhite_File);
@@ -272,6 +281,7 @@ void $decr_ExprList(struct ExprList* this) {
   } else {
     addPCR(
       this,
+      2,
       (void *) $markGray_ExprList,
       (void *) $scan_ExprList,
       (void *) $collectWhite_ExprList);
@@ -289,6 +299,7 @@ void $decr_Expr(struct Expr* this) {
   } else {
     addPCR(
       this,
+      2,
       (void *) $markGray_Expr,
       (void *) $scan_Expr,
       (void *) $collectWhite_Expr);
@@ -598,109 +609,94 @@ void $collectWhite_Expr(struct Expr* this) {
     freeList->next = curr;
   }
 }
-int fn$addFile(struct Context* ctx, struct File* file) {
-  ctx->rc ++;
-  file->rc ++;
-  struct FileList* ctorres$0 = malloc(sizeof (struct FileList));
+int main() {
+  struct CtxRef* ctorres$0 = malloc(sizeof (struct CtxRef));
   ctorres$0->rc = 0;
   ctorres$0->color = kBlack;
-  ctorres$0->kind = FileCons_tag;
-  ctorres$0->ctx_FileCons = ctx;
-  ctorres$0->ctx_FileCons->rc ++;
-  ctorres$0->head_FileCons = file;
-  ctorres$0->head_FileCons->rc ++;
-  ctorres$0->tail_FileCons = ctx->files;
-  ctorres$0->tail_FileCons->rc ++;
-  $decr_FileList(ctx->files);
-  ctx->files = ctorres$0;
-  ctx->files->rc ++;
-  ctx->files;
-  int ret$1 = 0;
-  $decr_Context(ctx);
-  $decr_File(file);
-  return ret$1;
-}
-int fn$addExpr(struct File* file, struct Expr* expr) {
-  file->rc ++;
-  expr->rc ++;
-  struct ExprList* ctorres$2 = malloc(sizeof (struct ExprList));
+  ctorres$0->kind = CtxRef_tag;
+  struct Context* ctorres$1 = malloc(sizeof (struct Context));
+  ctorres$1->rc = 0;
+  ctorres$1->color = kBlack;
+  ctorres$1->kind = Context_tag;
+  ctorres$1->name = "foo";
+  struct FileList* ctorres$2 = malloc(sizeof (struct FileList));
   ctorres$2->rc = 0;
   ctorres$2->color = kBlack;
-  ctorres$2->kind = ExprCons_tag;
-  ctorres$2->head_ExprCons = expr;
-  ctorres$2->head_ExprCons->rc ++;
-  ctorres$2->tail_ExprCons = file->exprs;
-  ctorres$2->tail_ExprCons->rc ++;
-  $decr_ExprList(file->exprs);
-  file->exprs = ctorres$2;
-  file->exprs->rc ++;
-  file->exprs;
-  int ret$3 = 0;
-  $decr_File(file);
-  $decr_Expr(expr);
-  return ret$3;
-}
-int main() {
-  struct CtxRef* ctorres$4 = malloc(sizeof (struct CtxRef));
+  ctorres$2->kind = FileNil_tag;
+  ctorres$1->files = ctorres$2;
+  ctorres$1->files->rc ++;
+  ctorres$0->ref = ctorres$1;
+  ctorres$0->ref->rc ++;
+  struct CtxRef* ctx = ctorres$0;
+  ctx->rc ++;
+  struct File* ctorres$3 = malloc(sizeof (struct File));
+  ctorres$3->rc = 0;
+  ctorres$3->color = kBlack;
+  ctorres$3->kind = File_tag;
+  struct ExprList* ctorres$4 = malloc(sizeof (struct ExprList));
   ctorres$4->rc = 0;
   ctorres$4->color = kBlack;
-  ctorres$4->kind = CtxRef_tag;
-  struct Context* ctorres$5 = malloc(sizeof (struct Context));
+  ctorres$4->kind = ExprNil_tag;
+  ctorres$3->exprs = ctorres$4;
+  ctorres$3->exprs->rc ++;
+  struct File* file = ctorres$3;
+  file->rc ++;
+  struct Context* actualCtx = ctx->ref;
+  actualCtx->rc ++;
+  struct FileList* ctorres$5 = malloc(sizeof (struct FileList));
   ctorres$5->rc = 0;
   ctorres$5->color = kBlack;
-  ctorres$5->kind = Context_tag;
-  ctorres$5->name = "foo";
-  struct FileList* ctorres$6 = malloc(sizeof (struct FileList));
+  ctorres$5->kind = FileCons_tag;
+  ctorres$5->ctx_FileCons = ctx->ref;
+  ctorres$5->ctx_FileCons->rc ++;
+  ctorres$5->head_FileCons = file;
+  ctorres$5->head_FileCons->rc ++;
+  ctorres$5->tail_FileCons = ctx->ref->files;
+  ctorres$5->tail_FileCons->rc ++;
+  $decr_FileList(actualCtx->files);
+  actualCtx->files = ctorres$5;
+  actualCtx->files->rc ++;
+  struct Expr* ctorres$6 = malloc(sizeof (struct Expr));
   ctorres$6->rc = 0;
   ctorres$6->color = kBlack;
-  ctorres$6->kind = FileNil_tag;
-  ctorres$5->files = ctorres$6;
-  ctorres$5->files->rc ++;
-  ctorres$4->ref = ctorres$5;
-  ctorres$4->ref->rc ++;
-  struct CtxRef* ctx = ctorres$4;
-  ctx->rc ++;
-  struct File* ctorres$7 = malloc(sizeof (struct File));
+  ctorres$6->kind = Expr_tag;
+  ctorres$6->file = file;
+  ctorres$6->file->rc ++;
+  struct Expr* expr = ctorres$6;
+  expr->rc ++;
+  struct ExprList* ctorres$7 = malloc(sizeof (struct ExprList));
   ctorres$7->rc = 0;
   ctorres$7->color = kBlack;
-  ctorres$7->kind = File_tag;
-  struct ExprList* ctorres$8 = malloc(sizeof (struct ExprList));
+  ctorres$7->kind = ExprCons_tag;
+  ctorres$7->head_ExprCons = expr;
+  ctorres$7->head_ExprCons->rc ++;
+  ctorres$7->tail_ExprCons = file->exprs;
+  ctorres$7->tail_ExprCons->rc ++;
+  $decr_ExprList(file->exprs);
+  file->exprs = ctorres$7;
+  file->exprs->rc ++;
+  actualCtx->files;
+  struct Context* ctorres$8 = malloc(sizeof (struct Context));
   ctorres$8->rc = 0;
   ctorres$8->color = kBlack;
-  ctorres$8->kind = ExprNil_tag;
-  ctorres$7->exprs = ctorres$8;
-  ctorres$7->exprs->rc ++;
-  struct File* file = ctorres$7;
-  file->rc ++;
-  struct Expr* ctorres$9 = malloc(sizeof (struct Expr));
+  ctorres$8->kind = Context_tag;
+  ctorres$8->name = "other context";
+  struct FileList* ctorres$9 = malloc(sizeof (struct FileList));
   ctorres$9->rc = 0;
   ctorres$9->color = kBlack;
-  ctorres$9->kind = Expr_tag;
-  ctorres$9->file = file;
-  ctorres$9->file->rc ++;
-  struct Expr* expr = ctorres$9;
-  expr->rc ++;
-  struct Context* ctorres$10 = malloc(sizeof (struct Context));
-  ctorres$10->rc = 0;
-  ctorres$10->color = kBlack;
-  ctorres$10->kind = Context_tag;
-  ctorres$10->name = "other context";
-  struct FileList* ctorres$11 = malloc(sizeof (struct FileList));
-  ctorres$11->rc = 0;
-  ctorres$11->color = kBlack;
-  ctorres$11->kind = FileNil_tag;
-  ctorres$10->files = ctorres$11;
-  ctorres$10->files->rc ++;
+  ctorres$9->kind = FileNil_tag;
+  ctorres$8->files = ctorres$9;
+  ctorres$8->files->rc ++;
   $decr_Context(ctx->ref);
-  ctx->ref = ctorres$10;
+  ctx->ref = ctorres$8;
   ctx->ref->rc ++;
-  fn$addExpr(file, expr);
+  file->exprs;
   ctx->ref;
-  fn$addFile(ctx->ref, file);
-  int ret$12 = 0;
+  int ret$10 = 0;
   $decr_Expr(expr);
+  $decr_Context(actualCtx);
   $decr_File(file);
   $decr_CtxRef(ctx);
   processAllPCRs();
-  return ret$12;
+  return ret$10;
 }

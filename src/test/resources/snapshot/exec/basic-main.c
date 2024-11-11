@@ -5,6 +5,7 @@ enum Color { kBlack, kGray, kWhite };
 
 struct PCR {
   void *obj;
+  int scc;
   void (*markGray)(void *);
   void (*scan)(void *);
   void (*collectWhite)(void *);
@@ -22,20 +23,26 @@ struct FreeCell *freeList = NULL;
 
 void addPCR(
     void *obj,
+    int scc,
     void (*markGray)(void *),
     void (*scan)(void *),
     void (*collectWhite)(void *)
 ) {
-  for (struct PCR* head = pcrs; head != NULL; head = head->next) {
-    if (head->obj == obj) return;
+  printf("[addPCR] scc: %d\n", scc);
+  struct PCR **prev = &pcrs;
+  while (*prev != NULL && (*prev)->scc <= scc) {
+    if ((*prev)->obj == obj) return;
+    printf("[addPCR] prev scc: %d\n", (*prev)->scc);
+    prev = &(*prev)->next;
   }
   struct PCR *pcr = malloc(sizeof(struct PCR));
   pcr->obj = obj;
+  pcr->scc = scc;
   pcr->markGray = markGray;
   pcr->scan = scan;
   pcr->collectWhite = collectWhite;
-  pcr->next = pcrs;
-  pcrs = pcr;
+  pcr->next = (*prev == NULL) ? NULL : (*prev)->next;
+  *prev = pcr;
 }
 
 void removePCR(void *obj) {
@@ -94,7 +101,6 @@ void processAllPCRs() {
 enum List_kind { Nil_tag, Cons_tag };
 struct List {
   int rc;
-  int scc;
   enum Color color;
   enum List_kind kind;
   union {
@@ -123,6 +129,7 @@ void $decr_List(struct List* this) {
   } else {
     addPCR(
       this,
+      0,
       (void *) $markGray_List,
       (void *) $scan_List,
       (void *) $collectWhite_List);

@@ -22,13 +22,14 @@ object Translator {
   /** Header as in the stuff that's at the top of the file, not as in .h files
     */
   private val CommonHeaderCode =
-    s"""|#include <stdlib.h>
+    raw"""|#include <stdlib.h>
         |#include <stdio.h>
         |
         |enum Color { $Black, $Gray, $White };
         |
         |struct PCR {
         |  void *obj;
+        |  int scc;
         |  void (*markGray)(void *);
         |  void (*scan)(void *);
         |  void (*collectWhite)(void *);
@@ -46,20 +47,26 @@ object Translator {
         |
         |void addPCR(
         |    void *obj,
+        |    int scc,
         |    void (*markGray)(void *),
         |    void (*scan)(void *),
         |    void (*collectWhite)(void *)
         |) {
-        |  for (struct PCR* head = pcrs; head != NULL; head = head->next) {
-        |    if (head->obj == obj) return;
+        |  printf("[addPCR] scc: %d\n", scc);
+        |  struct PCR **prev = &pcrs;
+        |  while (*prev != NULL && (*prev)->scc <= scc) {
+        |    if ((*prev)->obj == obj) return;
+        |    printf("[addPCR] prev scc: %d\n", (*prev)->scc);
+        |    prev = &(*prev)->next;
         |  }
         |  struct PCR *pcr = malloc(sizeof(struct PCR));
         |  pcr->obj = obj;
+        |  pcr->scc = scc;
         |  pcr->markGray = markGray;
         |  pcr->scan = scan;
         |  pcr->collectWhite = collectWhite;
-        |  pcr->next = pcrs;
-        |  pcrs = pcr;
+        |  pcr->next = (*prev == NULL) ? NULL : (*prev)->next;
+        |  *prev = pcr;
         |}
         |
         |void removePCR(void *obj) {
@@ -183,6 +190,7 @@ object Translator {
           |} else {
           |  addPCR(
           |    $This,
+          |    ${cycles.sccMap(typ)},
           |    (void *) ${MarkGray.name(typ)},
           |    (void *) ${Scan.name(typ)},
           |    (void *) ${CollectWhite.name(typ)});
