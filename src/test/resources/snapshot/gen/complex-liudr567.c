@@ -15,6 +15,9 @@ struct PCR {
 struct FreeCell {
   int rc;
   enum Color color;
+  void (*print)();
+  // Just to avoid the kind field being overwritten, so we can still print this
+  int kind;
   struct FreeCell *next;
 };
 
@@ -28,11 +31,11 @@ void addPCR(
     void (*scan)(void *),
     void (*collectWhite)(void *)
 ) {
-  printf("[addPCR] scc: %d\n", scc);
+  fprintf(stderr, "[addPCR] scc: %d\n", scc);
   struct PCR **prev = &pcrs;
   while (*prev != NULL && (*prev)->scc <= scc) {
     if ((*prev)->obj == obj) return;
-    printf("[addPCR] prev scc: %d\n", (*prev)->scc);
+    fprintf(stderr, "[addPCR] prev scc: %d\n", (*prev)->scc);
     prev = &(*prev)->next;
   }
   struct PCR *pcr = malloc(sizeof(struct PCR));
@@ -94,7 +97,10 @@ void collectFreeList() {
 void processAllPCRs() {
   markGrayAllPCRs(pcrs);
   scanAllPCRs(pcrs);
-  freeList = NULL;
+  if (freeList != NULL) {
+    fprintf(stderr, "Free list should be null\n");
+    exit(1);
+  }
   collectWhiteAllPCRs(pcrs);
   collectFreeList();
 }
@@ -102,6 +108,7 @@ enum Foo_kind { Bar_tag, Baz_tag };
 struct Foo {
   int rc;
   enum Color color;
+  void (*print)();
   enum Foo_kind kind;
   union {
     struct { int x_Bar; int y_Bar; };
@@ -113,6 +120,7 @@ void $markGray_Foo(struct Foo* this);
 void $scan_Foo(struct Foo* this);
 void $scanBlack_Foo(struct Foo* this);
 void $collectWhite_Foo(struct Foo* this);
+void $print_Foo(struct Foo* this);
 int fn$foo(struct Foo* foo);
 int main();
 void $decr_Foo(struct Foo* this) {
@@ -178,10 +186,35 @@ void $collectWhite_Foo(struct Foo* this) {
     case Baz_tag:
       break;
     }
+    fprintf(stderr, "Removing Foo\n");
     struct FreeCell *curr = freeList;
     freeList = (void *) this;
     freeList->next = curr;
   }
+}
+void $print_Foo(struct Foo* this) {
+    switch (this->kind) {
+    case Bar_tag:
+      printf("Bar {");
+      printf("x=");
+      printf("%d", this->x_Bar);
+      printf(", ");
+      printf("y=");
+      printf("%d", this->y_Bar);
+      printf(", ");
+      printf("}");
+      break;
+    case Baz_tag:
+      printf("Baz {");
+      printf("a=");
+      printf("%s", this->a_Baz);
+      printf(", ");
+      printf("b=");
+      printf("%d", this->b_Baz);
+      printf(", ");
+      printf("}");
+      break;
+    }
 }
 int fn$foo(struct Foo* foo) {
   foo->rc ++;
@@ -207,6 +240,7 @@ int main() {
   struct Foo* ctorres$3 = malloc(sizeof (struct Foo));
   ctorres$3->rc = 0;
   ctorres$3->color = kBlack;
+  ctorres$3->print = $print_Foo;
   ctorres$3->kind = Bar_tag;
   ctorres$3->x_Bar = 1;
   ctorres$3->y_Bar = 2;

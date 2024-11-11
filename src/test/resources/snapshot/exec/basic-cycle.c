@@ -15,6 +15,9 @@ struct PCR {
 struct FreeCell {
   int rc;
   enum Color color;
+  void (*print)();
+  // Just to avoid the kind field being overwritten, so we can still print this
+  int kind;
   struct FreeCell *next;
 };
 
@@ -28,11 +31,11 @@ void addPCR(
     void (*scan)(void *),
     void (*collectWhite)(void *)
 ) {
-  printf("[addPCR] scc: %d\n", scc);
+  fprintf(stderr, "[addPCR] scc: %d\n", scc);
   struct PCR **prev = &pcrs;
   while (*prev != NULL && (*prev)->scc <= scc) {
     if ((*prev)->obj == obj) return;
-    printf("[addPCR] prev scc: %d\n", (*prev)->scc);
+    fprintf(stderr, "[addPCR] prev scc: %d\n", (*prev)->scc);
     prev = &(*prev)->next;
   }
   struct PCR *pcr = malloc(sizeof(struct PCR));
@@ -94,7 +97,10 @@ void collectFreeList() {
 void processAllPCRs() {
   markGrayAllPCRs(pcrs);
   scanAllPCRs(pcrs);
-  freeList = NULL;
+  if (freeList != NULL) {
+    fprintf(stderr, "Free list should be null\n");
+    exit(1);
+  }
   collectWhiteAllPCRs(pcrs);
   collectFreeList();
 }
@@ -102,6 +108,7 @@ enum Option_kind { None_tag, Some_tag };
 struct Option {
   int rc;
   enum Color color;
+  void (*print)();
   enum Option_kind kind;
   union {
     struct {  };
@@ -112,6 +119,7 @@ enum List_kind { List_tag };
 struct List {
   int rc;
   enum Color color;
+  void (*print)();
   enum List_kind kind;
   int value;
   struct Option* next;
@@ -129,6 +137,8 @@ void $scanBlack_Option(struct Option* this);
 void $scanBlack_List(struct List* this);
 void $collectWhite_Option(struct Option* this);
 void $collectWhite_List(struct List* this);
+void $print_Option(struct Option* this);
+void $print_List(struct List* this);
 int main();
 void $decr_Option(struct Option* this) {
   if (--this->rc == 0) {
@@ -252,6 +262,7 @@ void $collectWhite_Option(struct Option* this) {
       $collectWhite_List(this->value_Some);
       break;
     }
+    fprintf(stderr, "Removing Option\n");
     struct FreeCell *curr = freeList;
     freeList = (void *) this;
     freeList->next = curr;
@@ -265,20 +276,52 @@ void $collectWhite_List(struct List* this) {
       $collectWhite_Option(this->next);
       break;
     }
+    fprintf(stderr, "Removing List\n");
     struct FreeCell *curr = freeList;
     freeList = (void *) this;
     freeList->next = curr;
   }
 }
+void $print_Option(struct Option* this) {
+    switch (this->kind) {
+    case None_tag:
+      printf("None {");
+      printf("}");
+      break;
+    case Some_tag:
+      printf("Some {");
+      printf("value=");
+      $print_List(this->value_Some);
+      printf(", ");
+      printf("}");
+      break;
+    }
+}
+void $print_List(struct List* this) {
+    switch (this->kind) {
+    case List_tag:
+      printf("List {");
+      printf("value=");
+      printf("%d", this->value);
+      printf(", ");
+      printf("next=");
+      $print_Option(this->next);
+      printf(", ");
+      printf("}");
+      break;
+    }
+}
 int main() {
   struct List* ctorres$0 = malloc(sizeof (struct List));
   ctorres$0->rc = 0;
   ctorres$0->color = kBlack;
+  ctorres$0->print = $print_List;
   ctorres$0->kind = List_tag;
   ctorres$0->value = 1;
   struct Option* ctorres$1 = malloc(sizeof (struct Option));
   ctorres$1->rc = 0;
   ctorres$1->color = kBlack;
+  ctorres$1->print = $print_Option;
   ctorres$1->kind = None_tag;
   ctorres$0->next = ctorres$1;
   ctorres$0->next->rc ++;
@@ -287,11 +330,13 @@ int main() {
   struct List* ctorres$2 = malloc(sizeof (struct List));
   ctorres$2->rc = 0;
   ctorres$2->color = kBlack;
+  ctorres$2->print = $print_List;
   ctorres$2->kind = List_tag;
   ctorres$2->value = 2;
   struct Option* ctorres$3 = malloc(sizeof (struct Option));
   ctorres$3->rc = 0;
   ctorres$3->color = kBlack;
+  ctorres$3->print = $print_Option;
   ctorres$3->kind = Some_tag;
   ctorres$3->value_Some = a;
   ctorres$3->value_Some->rc ++;
@@ -302,6 +347,7 @@ int main() {
   struct Option* ctorres$4 = malloc(sizeof (struct Option));
   ctorres$4->rc = 0;
   ctorres$4->color = kBlack;
+  ctorres$4->print = $print_Option;
   ctorres$4->kind = Some_tag;
   ctorres$4->value_Some = b;
   ctorres$4->value_Some->rc ++;

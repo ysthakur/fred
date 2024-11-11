@@ -15,6 +15,9 @@ struct PCR {
 struct FreeCell {
   int rc;
   enum Color color;
+  void (*print)();
+  // Just to avoid the kind field being overwritten, so we can still print this
+  int kind;
   struct FreeCell *next;
 };
 
@@ -28,11 +31,11 @@ void addPCR(
     void (*scan)(void *),
     void (*collectWhite)(void *)
 ) {
-  printf("[addPCR] scc: %d\n", scc);
+  fprintf(stderr, "[addPCR] scc: %d\n", scc);
   struct PCR **prev = &pcrs;
   while (*prev != NULL && (*prev)->scc <= scc) {
     if ((*prev)->obj == obj) return;
-    printf("[addPCR] prev scc: %d\n", (*prev)->scc);
+    fprintf(stderr, "[addPCR] prev scc: %d\n", (*prev)->scc);
     prev = &(*prev)->next;
   }
   struct PCR *pcr = malloc(sizeof(struct PCR));
@@ -94,7 +97,10 @@ void collectFreeList() {
 void processAllPCRs() {
   markGrayAllPCRs(pcrs);
   scanAllPCRs(pcrs);
-  freeList = NULL;
+  if (freeList != NULL) {
+    fprintf(stderr, "Free list should be null\n");
+    exit(1);
+  }
   collectWhiteAllPCRs(pcrs);
   collectFreeList();
 }
@@ -102,6 +108,7 @@ enum Foo_kind { Foo_tag };
 struct Foo {
   int rc;
   enum Color color;
+  void (*print)();
   enum Foo_kind kind;
   int field;
   union {
@@ -113,6 +120,7 @@ void $markGray_Foo(struct Foo* this);
 void $scan_Foo(struct Foo* this);
 void $scanBlack_Foo(struct Foo* this);
 void $collectWhite_Foo(struct Foo* this);
+void $print_Foo(struct Foo* this);
 int fn$bar(struct Foo* f);
 void $decr_Foo(struct Foo* this) {
   if (--this->rc == 0) {
@@ -167,10 +175,22 @@ void $collectWhite_Foo(struct Foo* this) {
     case Foo_tag:
       break;
     }
+    fprintf(stderr, "Removing Foo\n");
     struct FreeCell *curr = freeList;
     freeList = (void *) this;
     freeList->next = curr;
   }
+}
+void $print_Foo(struct Foo* this) {
+    switch (this->kind) {
+    case Foo_tag:
+      printf("Foo {");
+      printf("field=");
+      printf("%d", this->field);
+      printf(", ");
+      printf("}");
+      break;
+    }
 }
 int fn$bar(struct Foo* f) {
   f->rc ++;

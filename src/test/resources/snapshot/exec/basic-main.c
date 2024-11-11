@@ -15,6 +15,9 @@ struct PCR {
 struct FreeCell {
   int rc;
   enum Color color;
+  void (*print)();
+  // Just to avoid the kind field being overwritten, so we can still print this
+  int kind;
   struct FreeCell *next;
 };
 
@@ -28,11 +31,11 @@ void addPCR(
     void (*scan)(void *),
     void (*collectWhite)(void *)
 ) {
-  printf("[addPCR] scc: %d\n", scc);
+  fprintf(stderr, "[addPCR] scc: %d\n", scc);
   struct PCR **prev = &pcrs;
   while (*prev != NULL && (*prev)->scc <= scc) {
     if ((*prev)->obj == obj) return;
-    printf("[addPCR] prev scc: %d\n", (*prev)->scc);
+    fprintf(stderr, "[addPCR] prev scc: %d\n", (*prev)->scc);
     prev = &(*prev)->next;
   }
   struct PCR *pcr = malloc(sizeof(struct PCR));
@@ -94,7 +97,10 @@ void collectFreeList() {
 void processAllPCRs() {
   markGrayAllPCRs(pcrs);
   scanAllPCRs(pcrs);
-  freeList = NULL;
+  if (freeList != NULL) {
+    fprintf(stderr, "Free list should be null\n");
+    exit(1);
+  }
   collectWhiteAllPCRs(pcrs);
   collectFreeList();
 }
@@ -102,6 +108,7 @@ enum List_kind { Nil_tag, Cons_tag };
 struct List {
   int rc;
   enum Color color;
+  void (*print)();
   enum List_kind kind;
   union {
     struct {  };
@@ -113,6 +120,7 @@ void $markGray_List(struct List* this);
 void $scan_List(struct List* this);
 void $scanBlack_List(struct List* this);
 void $collectWhite_List(struct List* this);
+void $print_List(struct List* this);
 int fn$sum(struct List* list);
 int main();
 void $decr_List(struct List* this) {
@@ -185,10 +193,29 @@ void $collectWhite_List(struct List* this) {
       $collectWhite_List(this->next_Cons);
       break;
     }
+    fprintf(stderr, "Removing List\n");
     struct FreeCell *curr = freeList;
     freeList = (void *) this;
     freeList->next = curr;
   }
+}
+void $print_List(struct List* this) {
+    switch (this->kind) {
+    case Nil_tag:
+      printf("Nil {");
+      printf("}");
+      break;
+    case Cons_tag:
+      printf("Cons {");
+      printf("value=");
+      printf("%d", this->value_Cons);
+      printf(", ");
+      printf("next=");
+      $print_List(this->next_Cons);
+      printf(", ");
+      printf("}");
+      break;
+    }
 }
 int fn$sum(struct List* list) {
   list->rc ++;
@@ -214,21 +241,25 @@ int main() {
   struct List* ctorres$3 = malloc(sizeof (struct List));
   ctorres$3->rc = 0;
   ctorres$3->color = kBlack;
+  ctorres$3->print = $print_List;
   ctorres$3->kind = Cons_tag;
   ctorres$3->value_Cons = 1;
   struct List* ctorres$4 = malloc(sizeof (struct List));
   ctorres$4->rc = 0;
   ctorres$4->color = kBlack;
+  ctorres$4->print = $print_List;
   ctorres$4->kind = Cons_tag;
   ctorres$4->value_Cons = 2;
   struct List* ctorres$5 = malloc(sizeof (struct List));
   ctorres$5->rc = 0;
   ctorres$5->color = kBlack;
+  ctorres$5->print = $print_List;
   ctorres$5->kind = Cons_tag;
   ctorres$5->value_Cons = 4;
   struct List* ctorres$6 = malloc(sizeof (struct List));
   ctorres$6->rc = 0;
   ctorres$6->color = kBlack;
+  ctorres$6->print = $print_List;
   ctorres$6->kind = Nil_tag;
   ctorres$5->next_Cons = ctorres$6;
   ctorres$5->next_Cons->rc ++;
