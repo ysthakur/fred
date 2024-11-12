@@ -15,10 +15,8 @@ struct PCR {
 struct FreeCell {
   int rc;
   enum Color color;
-  void (*print)();
-  // Just to avoid the kind field being overwritten, so we can still print this
-  int kind;
   struct FreeCell *next;
+  void (*free)(void *);
 };
 
 struct PCR *pcrs;
@@ -64,45 +62,52 @@ void removePCR(void *obj) {
   }
 }
 
-void markGrayAllPCRs(struct PCR *head) {
-  if (head == NULL) return;
+void markGrayAllPCRs(struct PCR *head, int scc) {
+  if (head == NULL || head->scc != scc) return;
   struct PCR *next = head->next;
   head->markGray(head->obj);
-  markGrayAllPCRs(next);
+  markGrayAllPCRs(next, scc);
 }
 
-void scanAllPCRs(struct PCR *head) {
-  if (head == NULL) return;
+void scanAllPCRs(struct PCR *head, int scc) {
+  if (head == NULL || head->scc != scc) return;
   struct PCR *next = head->next;
   head->scan(head->obj);
-  scanAllPCRs(next);
+  scanAllPCRs(next, scc);
 }
 
-void collectWhiteAllPCRs(struct PCR *head) {
-  if (head == NULL) return;
+void collectWhiteAllPCRs(struct PCR *head, int scc) {
+  if (head == NULL || head->scc != scc) return;
   struct PCR *next = head->next;
   head->collectWhite(head->obj);
   free(head);
-  collectWhiteAllPCRs(next);
+  pcrs = next;
+  collectWhiteAllPCRs(next, scc);
 }
 
 void collectFreeList() {
   while (freeList != NULL) {
     struct FreeCell *next = freeList->next;
-    free(freeList);
+    (freeList->free)(freeList);
     freeList = next;
   }
 }
 
 void processAllPCRs() {
-  markGrayAllPCRs(pcrs);
-  scanAllPCRs(pcrs);
+  if (pcrs == NULL) return;
+  int firstScc = pcrs->scc;
+  markGrayAllPCRs(pcrs, firstScc);
+  scanAllPCRs(pcrs, firstScc);
   if (freeList != NULL) {
     fprintf(stderr, "Free list should be null\n");
     exit(1);
   }
-  collectWhiteAllPCRs(pcrs);
+  collectWhiteAllPCRs(pcrs, firstScc);
   collectFreeList();
+  fprintf(stderr, "firstScc: %d\n", firstScc);
+  if (pcrs != NULL) {
+    processAllPCRs();
+  }
 }
 enum CtxRef_kind { CtxRef_tag };
 struct CtxRef {
@@ -171,6 +176,12 @@ struct Expr {
     struct {  };
   };
 };
+void $free_CtxRef(struct CtxRef* this);
+void $free_Context(struct Context* this);
+void $free_FileList(struct FileList* this);
+void $free_File(struct File* this);
+void $free_ExprList(struct ExprList* this);
+void $free_Expr(struct Expr* this);
 void $decr_CtxRef(struct CtxRef* this);
 void $decr_Context(struct Context* this);
 void $decr_FileList(struct FileList* this);
@@ -208,6 +219,54 @@ void $print_File(struct File* this);
 void $print_ExprList(struct ExprList* this);
 void $print_Expr(struct Expr* this);
 int main();
+void $free_CtxRef(struct CtxRef* this) {
+  switch (this->kind) {
+  case CtxRef_tag:
+    $decr_Context(this->ref);
+    break;
+  }
+  free(this);
+}
+void $free_Context(struct Context* this) {
+  switch (this->kind) {
+  case Context_tag:
+    break;
+  }
+  free(this);
+}
+void $free_FileList(struct FileList* this) {
+  switch (this->kind) {
+  case FileNil_tag:
+    break;
+  case FileCons_tag:
+    $decr_File(this->head_FileCons);
+    break;
+  }
+  free(this);
+}
+void $free_File(struct File* this) {
+  switch (this->kind) {
+  case File_tag:
+    break;
+  }
+  free(this);
+}
+void $free_ExprList(struct ExprList* this) {
+  switch (this->kind) {
+  case ExprNil_tag:
+    break;
+  case ExprCons_tag:
+    break;
+  }
+  free(this);
+}
+void $free_Expr(struct Expr* this) {
+  switch (this->kind) {
+  case Expr_tag:
+    break;
+  }
+  free(this);
+}
 void $decr_CtxRef(struct CtxRef* this) {
   if (--this->rc == 0) {
     switch (this->kind) {
@@ -549,12 +608,14 @@ void $collectWhite_CtxRef(struct CtxRef* this) {
     this->color = kBlack;
     switch (this->kind) {
     case CtxRef_tag:
+      $collectWhite_Context(this->ref);
       break;
     }
     fprintf(stderr, "Removing CtxRef\n");
     struct FreeCell *curr = freeList;
     freeList = (void *) this;
     freeList->next = curr;
+    freeList->free = (void *) $free_CtxRef;
   }
 }
 void $collectWhite_Context(struct Context* this) {
@@ -569,6 +630,7 @@ void $collectWhite_Context(struct Context* this) {
     struct FreeCell *curr = freeList;
     freeList = (void *) this;
     freeList->next = curr;
+    freeList->free = (void *) $free_Context;
   }
 }
 void $collectWhite_FileList(struct FileList* this) {
@@ -579,6 +641,7 @@ void $collectWhite_FileList(struct FileList* this) {
       break;
     case FileCons_tag:
       $collectWhite_Context(this->ctx_FileCons);
+      $collectWhite_File(this->head_FileCons);
       $collectWhite_FileList(this->tail_FileCons);
       break;
     }
@@ -586,6 +649,7 @@ void $collectWhite_FileList(struct FileList* this) {
     struct FreeCell *curr = freeList;
     freeList = (void *) this;
     freeList->next = curr;
+    freeList->free = (void *) $free_FileList;
   }
 }
 void $collectWhite_File(struct File* this) {
@@ -600,6 +664,7 @@ void $collectWhite_File(struct File* this) {
     struct FreeCell *curr = freeList;
     freeList = (void *) this;
     freeList->next = curr;
+    freeList->free = (void *) $free_File;
   }
 }
 void $collectWhite_ExprList(struct ExprList* this) {
@@ -617,6 +682,7 @@ void $collectWhite_ExprList(struct ExprList* this) {
     struct FreeCell *curr = freeList;
     freeList = (void *) this;
     freeList->next = curr;
+    freeList->free = (void *) $free_ExprList;
   }
 }
 void $collectWhite_Expr(struct Expr* this) {
@@ -631,93 +697,94 @@ void $collectWhite_Expr(struct Expr* this) {
     struct FreeCell *curr = freeList;
     freeList = (void *) this;
     freeList->next = curr;
+    freeList->free = (void *) $free_Expr;
   }
 }
 void $print_CtxRef(struct CtxRef* this) {
-    switch (this->kind) {
-    case CtxRef_tag:
-      printf("CtxRef {");
-      printf("ref=");
-      $print_Context(this->ref);
-      printf(", ");
-      printf("}");
-      break;
-    }
+  switch (this->kind) {
+  case CtxRef_tag:
+    printf("CtxRef {");
+    printf("ref=");
+    $print_Context(this->ref);
+    printf(", ");
+    printf("}");
+    break;
+  }
 }
 void $print_Context(struct Context* this) {
-    switch (this->kind) {
-    case Context_tag:
-      printf("Context {");
-      printf("name=");
-      printf("%s", this->name);
-      printf(", ");
-      printf("files=");
-      $print_FileList(this->files);
-      printf(", ");
-      printf("}");
-      break;
-    }
+  switch (this->kind) {
+  case Context_tag:
+    printf("Context {");
+    printf("name=");
+    printf("%s", this->name);
+    printf(", ");
+    printf("files=");
+    $print_FileList(this->files);
+    printf(", ");
+    printf("}");
+    break;
+  }
 }
 void $print_FileList(struct FileList* this) {
-    switch (this->kind) {
-    case FileNil_tag:
-      printf("FileNil {");
-      printf("}");
-      break;
-    case FileCons_tag:
-      printf("FileCons {");
-      printf("ctx=");
-      $print_Context(this->ctx_FileCons);
-      printf(", ");
-      printf("head=");
-      $print_File(this->head_FileCons);
-      printf(", ");
-      printf("tail=");
-      $print_FileList(this->tail_FileCons);
-      printf(", ");
-      printf("}");
-      break;
-    }
+  switch (this->kind) {
+  case FileNil_tag:
+    printf("FileNil {");
+    printf("}");
+    break;
+  case FileCons_tag:
+    printf("FileCons {");
+    printf("ctx=");
+    $print_Context(this->ctx_FileCons);
+    printf(", ");
+    printf("head=");
+    $print_File(this->head_FileCons);
+    printf(", ");
+    printf("tail=");
+    $print_FileList(this->tail_FileCons);
+    printf(", ");
+    printf("}");
+    break;
+  }
 }
 void $print_File(struct File* this) {
-    switch (this->kind) {
-    case File_tag:
-      printf("File {");
-      printf("exprs=");
-      $print_ExprList(this->exprs);
-      printf(", ");
-      printf("}");
-      break;
-    }
+  switch (this->kind) {
+  case File_tag:
+    printf("File {");
+    printf("exprs=");
+    $print_ExprList(this->exprs);
+    printf(", ");
+    printf("}");
+    break;
+  }
 }
 void $print_ExprList(struct ExprList* this) {
-    switch (this->kind) {
-    case ExprNil_tag:
-      printf("ExprNil {");
-      printf("}");
-      break;
-    case ExprCons_tag:
-      printf("ExprCons {");
-      printf("head=");
-      $print_Expr(this->head_ExprCons);
-      printf(", ");
-      printf("tail=");
-      $print_ExprList(this->tail_ExprCons);
-      printf(", ");
-      printf("}");
-      break;
-    }
+  switch (this->kind) {
+  case ExprNil_tag:
+    printf("ExprNil {");
+    printf("}");
+    break;
+  case ExprCons_tag:
+    printf("ExprCons {");
+    printf("head=");
+    $print_Expr(this->head_ExprCons);
+    printf(", ");
+    printf("tail=");
+    $print_ExprList(this->tail_ExprCons);
+    printf(", ");
+    printf("}");
+    break;
+  }
 }
 void $print_Expr(struct Expr* this) {
-    switch (this->kind) {
-    case Expr_tag:
-      printf("Expr {");
-      printf("file=");
-      $print_File(this->file);
-      printf(", ");
-      printf("}");
-      break;
-    }
+  switch (this->kind) {
+  case Expr_tag:
+    printf("Expr {");
+    printf("file=");
+    $print_File(this->file);
+    printf(", ");
+    printf("}");
+    break;
+  }
 }
 int main() {
   struct CtxRef* ctorres$0 = malloc(sizeof (struct CtxRef));

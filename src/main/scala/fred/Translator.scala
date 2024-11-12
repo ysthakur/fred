@@ -39,10 +39,8 @@ object Translator {
           |struct $FreeCell {
           |  int $RcField;
           |  enum Color $ColorField;
-          |  void (*$PrinterField)();
-          |  // Just to avoid the kind field being overwritten, so we can still print this
-          |  int $KindField;
           |  struct $FreeCell *next;
+          |  void (*free)(void *);
           |};
           |
           |struct PCR *pcrs;
@@ -88,45 +86,52 @@ object Translator {
           |  }
           |}
           |
-          |void markGrayAllPCRs(struct PCR *head) {
-          |  if (head == NULL) return;
+          |void markGrayAllPCRs(struct PCR *head, int scc) {
+          |  if (head == NULL || head->scc != scc) return;
           |  struct PCR *next = head->next;
           |  head->markGray(head->obj);
-          |  markGrayAllPCRs(next);
+          |  markGrayAllPCRs(next, scc);
           |}
           |
-          |void scanAllPCRs(struct PCR *head) {
-          |  if (head == NULL) return;
+          |void scanAllPCRs(struct PCR *head, int scc) {
+          |  if (head == NULL || head->scc != scc) return;
           |  struct PCR *next = head->next;
           |  head->scan(head->obj);
-          |  scanAllPCRs(next);
+          |  scanAllPCRs(next, scc);
           |}
           |
-          |void collectWhiteAllPCRs(struct PCR *head) {
-          |  if (head == NULL) return;
+          |void collectWhiteAllPCRs(struct PCR *head, int scc) {
+          |  if (head == NULL || head->scc != scc) return;
           |  struct PCR *next = head->next;
           |  head->collectWhite(head->obj);
           |  free(head);
-          |  collectWhiteAllPCRs(next);
+          |  pcrs = next;
+          |  collectWhiteAllPCRs(next, scc);
           |}
           |
           |void collectFreeList() {
           |  while (freeList != NULL) {
           |    struct $FreeCell *next = freeList->next;
-          |    free(freeList);
+          |    (freeList->free)(freeList);
           |    freeList = next;
           |  }
           |}
           |
           |void processAllPCRs() {
-          |  markGrayAllPCRs(pcrs);
-          |  scanAllPCRs(pcrs);
+          |  if (pcrs == NULL) return;
+          |  int firstScc = pcrs->scc;
+          |  markGrayAllPCRs(pcrs, firstScc);
+          |  scanAllPCRs(pcrs, firstScc);
           |  if (freeList != NULL) {
           |    fprintf(stderr, "Free list should be null\n");
           |    exit(1);
           |  }
-          |  collectWhiteAllPCRs(pcrs);
+          |  collectWhiteAllPCRs(pcrs, firstScc);
           |  collectFreeList();
+          |  fprintf(stderr, "firstScc: %d\n", firstScc);
+          |  if (pcrs != NULL) {
+          |    processAllPCRs();
+          |  }
           |}
           |""".stripMargin
 
@@ -137,7 +142,7 @@ object Translator {
     given cycles: Cycles = Cycles.fromFile(file)
     val helper = Helper(typer)
     val (genDecls, genImpls) =
-      List(Decrementer, MarkGray, Scan, ScanBlack, CollectWhite, Printer)
+      List(Freer, Decrementer, MarkGray, Scan, ScanBlack, CollectWhite, Printer)
         .flatMap(gen => file.typeDefs.map(td => (gen.decl(td), gen.impl(td))))
         .unzip
     val (fnDecls, fnImpls) = file.fns.map(helper.fnToC).unzip
@@ -166,6 +171,36 @@ object Translator {
 
     def impl(typ: TypeDef)(using Bindings, Cycles) =
       s"${sig(typ)} {\n${indent(1)(body(typ))}\n}"
+  }
+
+  /** Free the object and decrement the refcounts of any objects it refers to
+    * that are NOT in the same SCC
+    */
+  private object Freer extends GeneratedFn("free") {
+    override def returnType = "void"
+
+    override def body(
+        typ: TypeDef
+    )(using bindings: Bindings, cycles: Cycles): String = {
+      val myScc = cycles.sccMap(typ)
+
+      val cases = switch(This, typ) {
+        case variant @ EnumCase(Spanned(ctorName, _), fields, _) =>
+          fields
+            .map { case FieldDef(_, fieldName, fieldTypeRef, _) =>
+              bindings.types(fieldTypeRef.name) match {
+                case fieldType: TypeDef if cycles.sccMap(fieldType) != myScc =>
+                  val mangled = cFieldName(fieldName.value, typ, variant)
+                  s"${decrRc(s"$This->$mangled", fieldType)}"
+                case _ => ""
+              }
+            }
+            .mkString("\n")
+      }
+
+      s"""|$cases
+          |free($This);""".stripMargin
+    }
   }
 
   /** Generate the signature and implementation for the decrementer function
@@ -316,9 +351,7 @@ object Translator {
               val mangled = cFieldName(fieldName.value, typ, variant)
               bindings.types(fieldTypeRef.name) match {
                 case fieldType: TypeDef =>
-                  if (cycles.sccMap(fieldType) == myScc)
-                    s"${CollectWhite.name(fieldType)}($This->$mangled);"
-                  else ""
+                  s"${CollectWhite.name(fieldType)}($This->$mangled);"
                 case _ => ""
               }
             }
@@ -332,6 +365,7 @@ object Translator {
             |  struct $FreeCell *curr = freeList;
             |  freeList = (void *) $This;
             |  freeList->next = curr;
+            |  freeList->free = (void *) ${Freer.name(typ)};
             |}""".stripMargin
     }
   }
@@ -344,25 +378,21 @@ object Translator {
     override def body(
         typ: TypeDef
     )(using bindings: Bindings, cycles: Cycles): String = {
-      val cases = indent(1) {
-        switch(This, typ) {
-          case variant @ EnumCase(Spanned(ctorName, _), fields, _) =>
-            val printFields = fields
-              .map { case FieldDef(_, fieldName, fieldType, _) =>
-                val mangled = cFieldName(fieldName.value, typ, variant)
-                raw"""|printf("${fieldName.value}=");
-                      |${callPrint(s"$This->$mangled", bindings.types(fieldType.name))}
-                      |printf(", ");""".stripMargin
-              }
-              .mkString("\n")
+      switch(This, typ) {
+        case variant @ EnumCase(Spanned(ctorName, _), fields, _) =>
+          val printFields = fields
+            .map { case FieldDef(_, fieldName, fieldType, _) =>
+              val mangled = cFieldName(fieldName.value, typ, variant)
+              raw"""|printf("${fieldName.value}=");
+                    |${callPrint(s"$This->$mangled", bindings.types(fieldType.name))}
+                    |printf(", ");""".stripMargin
+            }
+            .mkString("\n")
 
-            s"""|printf("$ctorName {");
-                |$printFields
-                |printf("}");""".stripMargin
-        }
+          s"""|printf("$ctorName {");
+              |$printFields
+              |printf("}");""".stripMargin
       }
-
-      s"""|$cases""".stripMargin
     }
   }
 

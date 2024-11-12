@@ -15,10 +15,8 @@ struct PCR {
 struct FreeCell {
   int rc;
   enum Color color;
-  void (*print)();
-  // Just to avoid the kind field being overwritten, so we can still print this
-  int kind;
   struct FreeCell *next;
+  void (*free)(void *);
 };
 
 struct PCR *pcrs;
@@ -64,45 +62,52 @@ void removePCR(void *obj) {
   }
 }
 
-void markGrayAllPCRs(struct PCR *head) {
-  if (head == NULL) return;
+void markGrayAllPCRs(struct PCR *head, int scc) {
+  if (head == NULL || head->scc != scc) return;
   struct PCR *next = head->next;
   head->markGray(head->obj);
-  markGrayAllPCRs(next);
+  markGrayAllPCRs(next, scc);
 }
 
-void scanAllPCRs(struct PCR *head) {
-  if (head == NULL) return;
+void scanAllPCRs(struct PCR *head, int scc) {
+  if (head == NULL || head->scc != scc) return;
   struct PCR *next = head->next;
   head->scan(head->obj);
-  scanAllPCRs(next);
+  scanAllPCRs(next, scc);
 }
 
-void collectWhiteAllPCRs(struct PCR *head) {
-  if (head == NULL) return;
+void collectWhiteAllPCRs(struct PCR *head, int scc) {
+  if (head == NULL || head->scc != scc) return;
   struct PCR *next = head->next;
   head->collectWhite(head->obj);
   free(head);
-  collectWhiteAllPCRs(next);
+  pcrs = next;
+  collectWhiteAllPCRs(next, scc);
 }
 
 void collectFreeList() {
   while (freeList != NULL) {
     struct FreeCell *next = freeList->next;
-    free(freeList);
+    (freeList->free)(freeList);
     freeList = next;
   }
 }
 
 void processAllPCRs() {
-  markGrayAllPCRs(pcrs);
-  scanAllPCRs(pcrs);
+  if (pcrs == NULL) return;
+  int firstScc = pcrs->scc;
+  markGrayAllPCRs(pcrs, firstScc);
+  scanAllPCRs(pcrs, firstScc);
   if (freeList != NULL) {
     fprintf(stderr, "Free list should be null\n");
     exit(1);
   }
-  collectWhiteAllPCRs(pcrs);
+  collectWhiteAllPCRs(pcrs, firstScc);
   collectFreeList();
+  fprintf(stderr, "firstScc: %d\n", firstScc);
+  if (pcrs != NULL) {
+    processAllPCRs();
+  }
 }
 enum List_kind { Nil_tag, Cons_tag };
 struct List {
@@ -115,6 +120,7 @@ struct List {
     struct { int value_Cons; struct List* next_Cons; };
   };
 };
+void $free_List(struct List* this);
 void $decr_List(struct List* this);
 void $markGray_List(struct List* this);
 void $scan_List(struct List* this);
@@ -123,6 +129,15 @@ void $collectWhite_List(struct List* this);
 void $print_List(struct List* this);
 int fn$sum(struct List* list);
 int main();
+void $free_List(struct List* this) {
+  switch (this->kind) {
+  case Nil_tag:
+    break;
+  case Cons_tag:
+    break;
+  }
+  free(this);
+}
 void $decr_List(struct List* this) {
   if (--this->rc == 0) {
     switch (this->kind) {
@@ -197,25 +212,26 @@ void $collectWhite_List(struct List* this) {
     struct FreeCell *curr = freeList;
     freeList = (void *) this;
     freeList->next = curr;
+    freeList->free = (void *) $free_List;
   }
 }
 void $print_List(struct List* this) {
-    switch (this->kind) {
-    case Nil_tag:
-      printf("Nil {");
-      printf("}");
-      break;
-    case Cons_tag:
-      printf("Cons {");
-      printf("value=");
-      printf("%d", this->value_Cons);
-      printf(", ");
-      printf("next=");
-      $print_List(this->next_Cons);
-      printf(", ");
-      printf("}");
-      break;
-    }
+  switch (this->kind) {
+  case Nil_tag:
+    printf("Nil {");
+    printf("}");
+    break;
+  case Cons_tag:
+    printf("Cons {");
+    printf("value=");
+    printf("%d", this->value_Cons);
+    printf(", ");
+    printf("next=");
+    $print_List(this->next_Cons);
+    printf(", ");
+    printf("}");
+    break;
+  }
 }
 int fn$sum(struct List* list) {
   list->rc ++;

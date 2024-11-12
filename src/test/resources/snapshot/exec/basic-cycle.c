@@ -15,10 +15,8 @@ struct PCR {
 struct FreeCell {
   int rc;
   enum Color color;
-  void (*print)();
-  // Just to avoid the kind field being overwritten, so we can still print this
-  int kind;
   struct FreeCell *next;
+  void (*free)(void *);
 };
 
 struct PCR *pcrs;
@@ -64,45 +62,52 @@ void removePCR(void *obj) {
   }
 }
 
-void markGrayAllPCRs(struct PCR *head) {
-  if (head == NULL) return;
+void markGrayAllPCRs(struct PCR *head, int scc) {
+  if (head == NULL || head->scc != scc) return;
   struct PCR *next = head->next;
   head->markGray(head->obj);
-  markGrayAllPCRs(next);
+  markGrayAllPCRs(next, scc);
 }
 
-void scanAllPCRs(struct PCR *head) {
-  if (head == NULL) return;
+void scanAllPCRs(struct PCR *head, int scc) {
+  if (head == NULL || head->scc != scc) return;
   struct PCR *next = head->next;
   head->scan(head->obj);
-  scanAllPCRs(next);
+  scanAllPCRs(next, scc);
 }
 
-void collectWhiteAllPCRs(struct PCR *head) {
-  if (head == NULL) return;
+void collectWhiteAllPCRs(struct PCR *head, int scc) {
+  if (head == NULL || head->scc != scc) return;
   struct PCR *next = head->next;
   head->collectWhite(head->obj);
   free(head);
-  collectWhiteAllPCRs(next);
+  pcrs = next;
+  collectWhiteAllPCRs(next, scc);
 }
 
 void collectFreeList() {
   while (freeList != NULL) {
     struct FreeCell *next = freeList->next;
-    free(freeList);
+    (freeList->free)(freeList);
     freeList = next;
   }
 }
 
 void processAllPCRs() {
-  markGrayAllPCRs(pcrs);
-  scanAllPCRs(pcrs);
+  if (pcrs == NULL) return;
+  int firstScc = pcrs->scc;
+  markGrayAllPCRs(pcrs, firstScc);
+  scanAllPCRs(pcrs, firstScc);
   if (freeList != NULL) {
     fprintf(stderr, "Free list should be null\n");
     exit(1);
   }
-  collectWhiteAllPCRs(pcrs);
+  collectWhiteAllPCRs(pcrs, firstScc);
   collectFreeList();
+  fprintf(stderr, "firstScc: %d\n", firstScc);
+  if (pcrs != NULL) {
+    processAllPCRs();
+  }
 }
 enum Option_kind { None_tag, Some_tag };
 struct Option {
@@ -127,6 +132,8 @@ struct List {
     struct {  };
   };
 };
+void $free_Option(struct Option* this);
+void $free_List(struct List* this);
 void $decr_Option(struct Option* this);
 void $decr_List(struct List* this);
 void $markGray_Option(struct Option* this);
@@ -140,6 +147,22 @@ void $collectWhite_List(struct List* this);
 void $print_Option(struct Option* this);
 void $print_List(struct List* this);
 int main();
+void $free_Option(struct Option* this) {
+  switch (this->kind) {
+  case None_tag:
+    break;
+  case Some_tag:
+    break;
+  }
+  free(this);
+}
+void $free_List(struct List* this) {
+  switch (this->kind) {
+  case List_tag:
+    break;
+  }
+  free(this);
+}
 void $decr_Option(struct Option* this) {
   if (--this->rc == 0) {
     switch (this->kind) {
@@ -266,6 +289,7 @@ void $collectWhite_Option(struct Option* this) {
     struct FreeCell *curr = freeList;
     freeList = (void *) this;
     freeList->next = curr;
+    freeList->free = (void *) $free_Option;
   }
 }
 void $collectWhite_List(struct List* this) {
@@ -280,36 +304,37 @@ void $collectWhite_List(struct List* this) {
     struct FreeCell *curr = freeList;
     freeList = (void *) this;
     freeList->next = curr;
+    freeList->free = (void *) $free_List;
   }
 }
 void $print_Option(struct Option* this) {
-    switch (this->kind) {
-    case None_tag:
-      printf("None {");
-      printf("}");
-      break;
-    case Some_tag:
-      printf("Some {");
-      printf("value=");
-      $print_List(this->value_Some);
-      printf(", ");
-      printf("}");
-      break;
-    }
+  switch (this->kind) {
+  case None_tag:
+    printf("None {");
+    printf("}");
+    break;
+  case Some_tag:
+    printf("Some {");
+    printf("value=");
+    $print_List(this->value_Some);
+    printf(", ");
+    printf("}");
+    break;
+  }
 }
 void $print_List(struct List* this) {
-    switch (this->kind) {
-    case List_tag:
-      printf("List {");
-      printf("value=");
-      printf("%d", this->value);
-      printf(", ");
-      printf("next=");
-      $print_Option(this->next);
-      printf(", ");
-      printf("}");
-      break;
-    }
+  switch (this->kind) {
+  case List_tag:
+    printf("List {");
+    printf("value=");
+    printf("%d", this->value);
+    printf(", ");
+    printf("next=");
+    $print_Option(this->next);
+    printf(", ");
+    printf("}");
+    break;
+  }
 }
 int main() {
   struct List* ctorres$0 = malloc(sizeof (struct List));
