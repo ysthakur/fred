@@ -36,15 +36,28 @@ object Translator {
           |  struct PCR *next;
           |};
           |
-          |struct $FreeCell {
+          |// Common object header
+          |typedef struct {
           |  int $RcField;
           |  enum Color $ColorField;
+          |  int kind;
+          |} Common;
+          |struct $FreeCell {
+          |  Common *obj;
           |  struct $FreeCell *next;
           |  void (*free)(void *);
           |};
           |
           |struct PCR *pcrs;
           |struct $FreeCell *freeList = NULL;
+          |
+          |void printPCRs() {
+          |  fprintf(stderr, "[printPCRs] pcrs: ");
+          |  for (struct PCR *head = pcrs; head != NULL; head = head->next) {
+          |    fprintf(stderr, "%p, ", head);
+          |  }
+          |  fprintf(stderr, "\n");
+          |}
           |
           |void addPCR(
           |    void *obj,
@@ -53,31 +66,35 @@ object Translator {
           |    void (*scan)(void *),
           |    void (*collectWhite)(void *)
           |) {
-          |  fprintf(stderr, "[addPCR] scc: %d\n", scc);
           |  struct PCR **prev = &pcrs;
           |  while (*prev != NULL && (*prev)->scc <= scc) {
           |    if ((*prev)->obj == obj) return;
-          |    fprintf(stderr, "[addPCR] prev scc: %d\n", (*prev)->scc);
+          |    // fprintf(stderr, "[addPCR] prev scc: %d\n", (*prev)->scc);
           |    prev = &(*prev)->next;
           |  }
           |  struct PCR *pcr = malloc(sizeof(struct PCR));
+          |  fprintf(stderr, "[addPCR] Added PCR %p, prev = %p, scc: %d\n", pcr, *prev, scc);
           |  pcr->obj = obj;
           |  pcr->scc = scc;
           |  pcr->markGray = markGray;
           |  pcr->scan = scan;
           |  pcr->collectWhite = collectWhite;
-          |  pcr->next = (*prev == NULL) ? NULL : (*prev)->next;
+          |  pcr->next = *prev;
           |  *prev = pcr;
+          |  printPCRs();
           |}
           |
           |void removePCR(void *obj) {
           |  struct PCR *head = pcrs;
           |  struct PCR **prev = &pcrs;
+          |  fprintf(stderr, "[removePCR] Trying to remove %p\n", obj);
           |  while (head != NULL) {
+          |    fprintf(stderr, "[removePCR] head = %p\n", head);
           |    if (head->obj == obj) {
-          |      *prev = head->next;
+          |      fprintf(stderr, "[removePCR] Removed %p\n", head);
+          |      struct PCR *next = head->next;
           |      free(head);
-          |      head = *prev;
+          |      *prev = next;
           |      break;
           |    } else {
           |      prev = &head->next;
@@ -100,19 +117,23 @@ object Translator {
           |  scanAllPCRs(next, scc);
           |}
           |
-          |void collectWhiteAllPCRs(struct PCR *head, int scc) {
-          |  if (head == NULL || head->scc != scc) return;
-          |  struct PCR *next = head->next;
-          |  head->collectWhite(head->obj);
-          |  free(head);
+          |void collectWhiteAllPCRs(int scc) {
+          |  if (pcrs == NULL || pcrs->scc != scc) return;
+          |  fprintf(stderr, "[collectWhiteAllPCRs] pcr: %p, scc: %d\n", pcrs, scc);
+          |  printPCRs();
+          |  struct PCR *next = pcrs->next;
+          |  pcrs->collectWhite(pcrs->obj);
+          |  free(pcrs);
+          |  fprintf(stderr, "Removed a PCR %p\n", pcrs);
           |  pcrs = next;
-          |  collectWhiteAllPCRs(next, scc);
+          |  collectWhiteAllPCRs(scc);
           |}
           |
           |void collectFreeList() {
           |  while (freeList != NULL) {
           |    struct $FreeCell *next = freeList->next;
-          |    (freeList->free)(freeList);
+          |    (freeList->free)(freeList->obj);
+          |    free(freeList);
           |    freeList = next;
           |  }
           |}
@@ -126,7 +147,7 @@ object Translator {
           |    fprintf(stderr, "Free list should be null\n");
           |    exit(1);
           |  }
-          |  collectWhiteAllPCRs(pcrs, firstScc);
+          |  collectWhiteAllPCRs(firstScc);
           |  collectFreeList();
           |  fprintf(stderr, "firstScc: %d\n", firstScc);
           |  if (pcrs != NULL) {
@@ -198,8 +219,9 @@ object Translator {
             .mkString("\n")
       }
 
-      s"""|$cases
-          |free($This);""".stripMargin
+      raw"""|fprintf(stderr, "Freeing ${typ.name}\n");
+            |$cases
+            |free($This);""".stripMargin
     }
   }
 
@@ -224,18 +246,19 @@ object Translator {
         }
       }
 
-      s"""|if (--$This->$RcField == 0) {
-          |$deleteCases
-          |  removePCR($This);
-          |  free($This);
-          |} else {
-          |  addPCR(
-          |    $This,
-          |    ${cycles.sccMap(typ)},
-          |    (void *) ${MarkGray.name(typ)},
-          |    (void *) ${Scan.name(typ)},
-          |    (void *) ${CollectWhite.name(typ)});
-          |}""".stripMargin
+      raw"""|fprintf(stderr, "Decrementing ${typ.name} (%p)\n", $This);
+            |if (--$This->$RcField == 0) {
+            |$deleteCases
+            |  removePCR($This);
+            |  free($This);
+            |} else {
+            |  addPCR(
+            |    $This,
+            |    ${cycles.sccMap(typ)},
+            |    (void *) ${MarkGray.name(typ)},
+            |    (void *) ${Scan.name(typ)},
+            |    (void *) ${CollectWhite.name(typ)});
+            |}""".stripMargin
     }
   }
 
@@ -363,7 +386,8 @@ object Translator {
             |$rec
             |  fprintf(stderr, "Removing ${typ.name}\n");
             |  struct $FreeCell *curr = freeList;
-            |  freeList = (void *) $This;
+            |  freeList = malloc(sizeof(struct $FreeCell));
+            |  freeList->obj = (void *) $This;
             |  freeList->next = curr;
             |  freeList->free = (void *) ${Freer.name(typ)};
             |}""".stripMargin

@@ -12,15 +12,28 @@ struct PCR {
   struct PCR *next;
 };
 
-struct FreeCell {
+// Common object header
+typedef struct {
   int rc;
   enum Color color;
+  int kind;
+} Common;
+struct FreeCell {
+  Common *obj;
   struct FreeCell *next;
   void (*free)(void *);
 };
 
 struct PCR *pcrs;
 struct FreeCell *freeList = NULL;
+
+void printPCRs() {
+  fprintf(stderr, "[printPCRs] pcrs: ");
+  for (struct PCR *head = pcrs; head != NULL; head = head->next) {
+    fprintf(stderr, "%p, ", head);
+  }
+  fprintf(stderr, "\n");
+}
 
 void addPCR(
     void *obj,
@@ -29,31 +42,35 @@ void addPCR(
     void (*scan)(void *),
     void (*collectWhite)(void *)
 ) {
-  fprintf(stderr, "[addPCR] scc: %d\n", scc);
   struct PCR **prev = &pcrs;
   while (*prev != NULL && (*prev)->scc <= scc) {
     if ((*prev)->obj == obj) return;
-    fprintf(stderr, "[addPCR] prev scc: %d\n", (*prev)->scc);
+    // fprintf(stderr, "[addPCR] prev scc: %d\n", (*prev)->scc);
     prev = &(*prev)->next;
   }
   struct PCR *pcr = malloc(sizeof(struct PCR));
+  fprintf(stderr, "[addPCR] Added PCR %p, prev = %p, scc: %d\n", pcr, *prev, scc);
   pcr->obj = obj;
   pcr->scc = scc;
   pcr->markGray = markGray;
   pcr->scan = scan;
   pcr->collectWhite = collectWhite;
-  pcr->next = (*prev == NULL) ? NULL : (*prev)->next;
+  pcr->next = *prev;
   *prev = pcr;
+  printPCRs();
 }
 
 void removePCR(void *obj) {
   struct PCR *head = pcrs;
   struct PCR **prev = &pcrs;
+  fprintf(stderr, "[removePCR] Trying to remove %p\n", obj);
   while (head != NULL) {
+    fprintf(stderr, "[removePCR] head = %p\n", head);
     if (head->obj == obj) {
-      *prev = head->next;
+      fprintf(stderr, "[removePCR] Removed %p\n", head);
+      struct PCR *next = head->next;
       free(head);
-      head = *prev;
+      *prev = next;
       break;
     } else {
       prev = &head->next;
@@ -76,19 +93,23 @@ void scanAllPCRs(struct PCR *head, int scc) {
   scanAllPCRs(next, scc);
 }
 
-void collectWhiteAllPCRs(struct PCR *head, int scc) {
-  if (head == NULL || head->scc != scc) return;
-  struct PCR *next = head->next;
-  head->collectWhite(head->obj);
-  free(head);
+void collectWhiteAllPCRs(int scc) {
+  if (pcrs == NULL || pcrs->scc != scc) return;
+  fprintf(stderr, "[collectWhiteAllPCRs] pcr: %p, scc: %d\n", pcrs, scc);
+  printPCRs();
+  struct PCR *next = pcrs->next;
+  pcrs->collectWhite(pcrs->obj);
+  free(pcrs);
+  fprintf(stderr, "Removed a PCR %p\n", pcrs);
   pcrs = next;
-  collectWhiteAllPCRs(next, scc);
+  collectWhiteAllPCRs(scc);
 }
 
 void collectFreeList() {
   while (freeList != NULL) {
     struct FreeCell *next = freeList->next;
-    (freeList->free)(freeList);
+    (freeList->free)(freeList->obj);
+    free(freeList);
     freeList = next;
   }
 }
@@ -102,7 +123,7 @@ void processAllPCRs() {
     fprintf(stderr, "Free list should be null\n");
     exit(1);
   }
-  collectWhiteAllPCRs(pcrs, firstScc);
+  collectWhiteAllPCRs(firstScc);
   collectFreeList();
   fprintf(stderr, "firstScc: %d\n", firstScc);
   if (pcrs != NULL) {
@@ -220,6 +241,7 @@ void $print_ExprList(struct ExprList* this);
 void $print_Expr(struct Expr* this);
 int main();
 void $free_CtxRef(struct CtxRef* this) {
+  fprintf(stderr, "Freeing CtxRef\n");
   switch (this->kind) {
   case CtxRef_tag:
     $decr_Context(this->ref);
@@ -228,6 +250,7 @@ void $free_CtxRef(struct CtxRef* this) {
   free(this);
 }
 void $free_Context(struct Context* this) {
+  fprintf(stderr, "Freeing Context\n");
   switch (this->kind) {
   case Context_tag:
     break;
@@ -235,6 +258,7 @@ void $free_Context(struct Context* this) {
   free(this);
 }
 void $free_FileList(struct FileList* this) {
+  fprintf(stderr, "Freeing FileList\n");
   switch (this->kind) {
   case FileNil_tag:
     break;
@@ -245,6 +269,7 @@ void $free_FileList(struct FileList* this) {
   free(this);
 }
 void $free_File(struct File* this) {
+  fprintf(stderr, "Freeing File\n");
   switch (this->kind) {
   case File_tag:
     break;
@@ -252,6 +277,7 @@ void $free_File(struct File* this) {
   free(this);
 }
 void $free_ExprList(struct ExprList* this) {
+  fprintf(stderr, "Freeing ExprList\n");
   switch (this->kind) {
   case ExprNil_tag:
     break;
@@ -261,6 +287,7 @@ void $free_ExprList(struct ExprList* this) {
   free(this);
 }
 void $free_Expr(struct Expr* this) {
+  fprintf(stderr, "Freeing Expr\n");
   switch (this->kind) {
   case Expr_tag:
     break;
@@ -268,6 +295,7 @@ void $free_Expr(struct Expr* this) {
   free(this);
 }
 void $decr_CtxRef(struct CtxRef* this) {
+  fprintf(stderr, "Decrementing CtxRef (%p)\n", this);
   if (--this->rc == 0) {
     switch (this->kind) {
     case CtxRef_tag:
@@ -286,6 +314,7 @@ void $decr_CtxRef(struct CtxRef* this) {
   }
 }
 void $decr_Context(struct Context* this) {
+  fprintf(stderr, "Decrementing Context (%p)\n", this);
   if (--this->rc == 0) {
     switch (this->kind) {
     case Context_tag:
@@ -304,6 +333,7 @@ void $decr_Context(struct Context* this) {
   }
 }
 void $decr_FileList(struct FileList* this) {
+  fprintf(stderr, "Decrementing FileList (%p)\n", this);
   if (--this->rc == 0) {
     switch (this->kind) {
     case FileNil_tag:
@@ -326,6 +356,7 @@ void $decr_FileList(struct FileList* this) {
   }
 }
 void $decr_File(struct File* this) {
+  fprintf(stderr, "Decrementing File (%p)\n", this);
   if (--this->rc == 0) {
     switch (this->kind) {
     case File_tag:
@@ -344,6 +375,7 @@ void $decr_File(struct File* this) {
   }
 }
 void $decr_ExprList(struct ExprList* this) {
+  fprintf(stderr, "Decrementing ExprList (%p)\n", this);
   if (--this->rc == 0) {
     switch (this->kind) {
     case ExprNil_tag:
@@ -365,6 +397,7 @@ void $decr_ExprList(struct ExprList* this) {
   }
 }
 void $decr_Expr(struct Expr* this) {
+  fprintf(stderr, "Decrementing Expr (%p)\n", this);
   if (--this->rc == 0) {
     switch (this->kind) {
     case Expr_tag:
@@ -613,7 +646,8 @@ void $collectWhite_CtxRef(struct CtxRef* this) {
     }
     fprintf(stderr, "Removing CtxRef\n");
     struct FreeCell *curr = freeList;
-    freeList = (void *) this;
+    freeList = malloc(sizeof(struct FreeCell));
+    freeList->obj = (void *) this;
     freeList->next = curr;
     freeList->free = (void *) $free_CtxRef;
   }
@@ -628,7 +662,8 @@ void $collectWhite_Context(struct Context* this) {
     }
     fprintf(stderr, "Removing Context\n");
     struct FreeCell *curr = freeList;
-    freeList = (void *) this;
+    freeList = malloc(sizeof(struct FreeCell));
+    freeList->obj = (void *) this;
     freeList->next = curr;
     freeList->free = (void *) $free_Context;
   }
@@ -647,7 +682,8 @@ void $collectWhite_FileList(struct FileList* this) {
     }
     fprintf(stderr, "Removing FileList\n");
     struct FreeCell *curr = freeList;
-    freeList = (void *) this;
+    freeList = malloc(sizeof(struct FreeCell));
+    freeList->obj = (void *) this;
     freeList->next = curr;
     freeList->free = (void *) $free_FileList;
   }
@@ -662,7 +698,8 @@ void $collectWhite_File(struct File* this) {
     }
     fprintf(stderr, "Removing File\n");
     struct FreeCell *curr = freeList;
-    freeList = (void *) this;
+    freeList = malloc(sizeof(struct FreeCell));
+    freeList->obj = (void *) this;
     freeList->next = curr;
     freeList->free = (void *) $free_File;
   }
@@ -680,7 +717,8 @@ void $collectWhite_ExprList(struct ExprList* this) {
     }
     fprintf(stderr, "Removing ExprList\n");
     struct FreeCell *curr = freeList;
-    freeList = (void *) this;
+    freeList = malloc(sizeof(struct FreeCell));
+    freeList->obj = (void *) this;
     freeList->next = curr;
     freeList->free = (void *) $free_ExprList;
   }
@@ -695,7 +733,8 @@ void $collectWhite_Expr(struct Expr* this) {
     }
     fprintf(stderr, "Removing Expr\n");
     struct FreeCell *curr = freeList;
-    freeList = (void *) this;
+    freeList = malloc(sizeof(struct FreeCell));
+    freeList->obj = (void *) this;
     freeList->next = curr;
     freeList->free = (void *) $free_Expr;
   }
