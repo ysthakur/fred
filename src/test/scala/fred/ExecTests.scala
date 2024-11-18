@@ -1,12 +1,13 @@
 package fred
 
-import snapshot4s.munit.SnapshotAssertions
+import org.scalatest.funsuite.AnyFunSuite
+import snapshot4s.scalatest.SnapshotAssertions
 import snapshot4s.generated.snapshotConfig
 
 import scala.sys.process.*
 import java.nio.file.Paths
 
-class ExecTests extends munit.FunSuite with SnapshotAssertions {
+class ExecTests extends AnyFunSuite with SnapshotAssertions {
   def valgrindCheck(code: String, outFile: String)(expected: String) = {
     val parsedFile = Parser.parse(code)
     given typer: Typer = Typer.resolveAllTypes(parsedFile)
@@ -28,7 +29,7 @@ class ExecTests extends munit.FunSuite with SnapshotAssertions {
           throw RuntimeException(stderrBuf.toString, e)
       }
     val valgrindOut = stderrBuf.toString
-    assertNoDiff(stdout, expected, valgrindOut)
+    assert(stdout.trim() === expected.trim(), valgrindOut)
     assert(valgrindOut.contains("ERROR SUMMARY: 0 errors"), valgrindOut)
   }
 

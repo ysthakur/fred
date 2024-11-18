@@ -15,8 +15,10 @@ lazy val root = project
 
     libraryDependencies ++= Seq(
       "org.typelevel" %% "cats-parse" % "0.3.9",
-      "org.scalameta" %% "munit" % "1.0.0" % Test,
-      "com.siriusxm" %% "snapshot4s-munit" % "0.1.5" % Test,
+      "org.scalactic" %% "scalactic" % "3.2.19",
+      "org.scalatest" %% "scalatest" % "3.2.19" % Test,
+      "org.scalatestplus" %% "scalacheck-1-18" % "3.2.19.0" % Test,
+      "com.siriusxm" %% "snapshot4s-scalatest" % snapshot4sVersion % Test,
       "com.lihaoyi" %% "pprint" % "0.9.0" % Test,
     )
   )

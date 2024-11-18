@@ -1,9 +1,10 @@
 package fred
 
-import snapshot4s.munit.SnapshotAssertions
+import org.scalatest.funsuite.AnyFunSuite
+import snapshot4s.scalatest.SnapshotAssertions
 import snapshot4s.generated.snapshotConfig
 
-class TyperTests extends munit.FunSuite with SnapshotAssertions {
+class TyperTests extends AnyFunSuite with SnapshotAssertions {
   test("Typing a thing") {
     val parsed = Parser.parse("""
       data Foo

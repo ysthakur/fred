@@ -1,9 +1,10 @@
 package fred
 
-import snapshot4s.munit.SnapshotAssertions
+import org.scalatest.funsuite.AnyFunSuite
+import snapshot4s.scalatest.SnapshotAssertions
 import snapshot4s.generated.snapshotConfig
 
-class SCCTests extends munit.FunSuite with SnapshotAssertions {
+class SCCTests extends AnyFunSuite with SnapshotAssertions {
 
   /** This is just a helper to avoid typing out calls to the TypeDef ctor */
   def createFile(graph: Map[String, Set[(Boolean, String)]]): ParsedFile = {
@@ -50,9 +51,9 @@ class SCCTests extends munit.FunSuite with SnapshotAssertions {
       )
     )
 
-    assertEquals(
-      List(Set("B", "A"), Set("C"), Set("D", "F", "E")),
-      simplifySCCs(Cycles.fromFile(file).sccs)
+    assert(
+      List(Set("B", "A"), Set("C"), Set("D", "F", "E"))
+        === simplifySCCs(Cycles.fromFile(file).sccs)
     )
   }
 
@@ -69,9 +70,15 @@ class SCCTests extends munit.FunSuite with SnapshotAssertions {
       )
     )
 
-    assertEquals(
-      List(Set("A"), Set("D"), Set("C"), Set("G"), Set("B"), Set("F", "E")),
-      simplifySCCs(Cycles.fromFile(file).sccs)
+    assert(
+      List(
+        Set("A"),
+        Set("D"),
+        Set("C"),
+        Set("G"),
+        Set("B"),
+        Set("F", "E")
+      ) === simplifySCCs(Cycles.fromFile(file).sccs)
     )
   }
 
@@ -85,8 +92,8 @@ class SCCTests extends munit.FunSuite with SnapshotAssertions {
     )
 
     val cycles = Cycles.fromFile(file)
-    assertEquals(cycles.sccs.size, 1)
-    assertEquals(cycles.badSCCs, List(0))
+    assert(cycles.sccs.size === 1)
+    assert(cycles.badSCCs === List(0))
   }
 
   test("Is basic good SCC not incorrectly marked bad") {
