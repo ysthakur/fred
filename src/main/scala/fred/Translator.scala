@@ -29,11 +29,17 @@ object Translator {
           |
           |struct PCR {
           |  void *obj;
-          |  int scc;
           |  void (*markGray)(void *);
           |  void (*scan)(void *);
           |  void (*collectWhite)(void *);
           |  struct PCR *next;
+          |};
+          |
+          |struct PCRBucket {
+          |  int scc;
+          |  struct PCR *first;
+          |  struct PCR *last;
+          |  struct PCRBucket *next;
           |};
           |
           |// Common object header
@@ -49,16 +55,8 @@ object Translator {
           |  void (*free)(void *);
           |};
           |
-          |struct PCR *pcrs;
+          |struct PCRBucket *pcrBuckets = NULL;
           |struct $FreeCell *freeList = NULL;
-          |
-          |void printPCRs() {
-          |  fprintf(stderr, "[printPCRs] pcrs: ");
-          |  for (struct PCR *head = pcrs; head != NULL; head = head->next) {
-          |    fprintf(stderr, "%p, ", head);
-          |  }
-          |  fprintf(stderr, "\n");
-          |}
           |
           |void addPCR(
           |    Common *obj,
@@ -69,29 +67,46 @@ object Translator {
           |) {
           |  if (obj->addedPCR) return;
           |  obj->addedPCR = 1;
-          |  struct PCR **prev = &pcrs;
-          |  while (*prev != NULL && (*prev)->scc <= scc) {
+          |
+          |  struct PCRBucket **prev = &pcrBuckets;
+          |  while (*prev != NULL && (*prev)->scc < scc) {
           |    // fprintf(stderr, "[addPCR] prev scc: %d\n", (*prev)->scc);
           |    prev = &(*prev)->next;
           |  }
+          |
           |  struct PCR *pcr = malloc(sizeof(struct PCR));
           |  fprintf(stderr, "[addPCR] Added PCR %p, prev = %p, scc: %d\n", pcr, *prev, scc);
           |  pcr->obj = obj;
-          |  pcr->scc = scc;
           |  pcr->markGray = markGray;
           |  pcr->scan = scan;
           |  pcr->collectWhite = collectWhite;
-          |  pcr->next = *prev;
-          |  *prev = pcr;
-          |  printPCRs();
+          |  pcr->next = NULL;
+          |
+          |  if (*prev == NULL || scc < (*prev)->scc) {
+          |    struct PCRBucket *newBucket = malloc(sizeof(struct PCRBucket));
+          |    newBucket->scc = scc;
+          |    newBucket->first = pcr;
+          |    newBucket->last = pcr;
+          |    newBucket->next = *prev;
+          |    *prev = newBucket;
+          |  } else {
+          |    (*prev)->last->next = pcr;
+          |    (*prev)->last = pcr;
+          |  }
           |}
           |
-          |void removePCR(Common *obj) {
+          |void removePCR(Common *obj, int scc) {
           |  if (!obj->addedPCR) return;
           |  obj->addedPCR = 0;
-          |  struct PCR *head = pcrs;
-          |  struct PCR **prev = &pcrs;
           |  fprintf(stderr, "[removePCR] Trying to remove %p\n", obj);
+          |
+          |  struct PCRBucket *bucket = pcrBuckets;
+          |  while (bucket->scc != scc) {
+          |    bucket = bucket->next;
+          |  }
+          |
+          |  struct PCR *head = bucket->first;
+          |  struct PCR **prev = &bucket->first;
           |  while (head != NULL) {
           |    fprintf(stderr, "[removePCR] head = %p\n", head);
           |    if (head->obj == obj) {
@@ -107,30 +122,26 @@ object Translator {
           |  }
           |}
           |
-          |void markGrayAllPCRs(struct PCR *head, int scc) {
-          |  if (head == NULL || head->scc != scc) return;
+          |void markGrayAllPCRs(struct PCR *head) {
+          |  if (head == NULL) return;
           |  struct PCR *next = head->next;
           |  head->markGray(head->obj);
-          |  markGrayAllPCRs(next, scc);
+          |  markGrayAllPCRs(next);
           |}
           |
-          |void scanAllPCRs(struct PCR *head, int scc) {
-          |  if (head == NULL || head->scc != scc) return;
+          |void scanAllPCRs(struct PCR *head) {
+          |  if (head == NULL) return;
           |  struct PCR *next = head->next;
           |  head->scan(head->obj);
-          |  scanAllPCRs(next, scc);
+          |  scanAllPCRs(next);
           |}
           |
-          |void collectWhiteAllPCRs(int scc) {
-          |  if (pcrs == NULL || pcrs->scc != scc) return;
-          |  fprintf(stderr, "[collectWhiteAllPCRs] pcr: %p, scc: %d\n", pcrs, scc);
-          |  printPCRs();
-          |  struct PCR *next = pcrs->next;
-          |  pcrs->collectWhite(pcrs->obj);
-          |  free(pcrs);
-          |  fprintf(stderr, "Removed a PCR %p\n", pcrs);
-          |  pcrs = next;
-          |  collectWhiteAllPCRs(scc);
+          |void collectWhiteAllPCRs(struct PCR *head) {
+          |  if (head == NULL) return;
+          |  struct PCR *next = head->next;
+          |  head->collectWhite(head->obj);
+          |  free(head);
+          |  collectWhiteAllPCRs(next);
           |}
           |
           |void collectFreeList() {
@@ -143,19 +154,19 @@ object Translator {
           |}
           |
           |void processAllPCRs() {
-          |  if (pcrs == NULL) return;
-          |  int firstScc = pcrs->scc;
-          |  markGrayAllPCRs(pcrs, firstScc);
-          |  scanAllPCRs(pcrs, firstScc);
-          |  if (freeList != NULL) {
-          |    fprintf(stderr, "Free list should be null\n");
-          |    exit(1);
-          |  }
-          |  collectWhiteAllPCRs(firstScc);
-          |  collectFreeList();
-          |  fprintf(stderr, "firstScc: %d\n", firstScc);
-          |  if (pcrs != NULL) {
-          |    processAllPCRs();
+          |  while (pcrBuckets != NULL) {
+          |    markGrayAllPCRs(pcrBuckets->first);
+          |    scanAllPCRs(pcrBuckets->first);
+          |    if (freeList != NULL) {
+          |      fprintf(stderr, "Free list should be null\n");
+          |      exit(1);
+          |    }
+          |    collectWhiteAllPCRs(pcrBuckets->first);
+          |    collectFreeList();
+          |    fprintf(stderr, "[processAllPCRs]: Processed scc %d\n", pcrBuckets->scc);
+          |    struct PCRBucket *next = pcrBuckets->next;
+          |    free(pcrBuckets);
+          |    pcrBuckets = next;
           |  }
           |}
           |""".stripMargin
@@ -249,16 +260,17 @@ object Translator {
               .mkString("\n")
         }
       }
+      val scc = cycles.sccMap(typ)
 
       raw"""|fprintf(stderr, "Decrementing ${typ.name} (%p)\n", $This);
             |if (--$This->$RcField == 0) {
             |$deleteCases
-            |  removePCR((void *) $This);
+            |  removePCR((void *) $This, $scc);
             |  free($This);
             |} else {
             |  addPCR(
             |    (void *) $This,
-            |    ${cycles.sccMap(typ)},
+            |    $scc,
             |    (void *) ${MarkGray.name(typ)},
             |    (void *) ${Scan.name(typ)},
             |    (void *) ${CollectWhite.name(typ)});
