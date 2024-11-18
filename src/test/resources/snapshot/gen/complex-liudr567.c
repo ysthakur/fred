@@ -16,6 +16,7 @@ struct PCR {
 typedef struct {
   int rc;
   enum Color color;
+  int addedPCR;
   int kind;
 } Common;
 struct FreeCell {
@@ -36,15 +37,16 @@ void printPCRs() {
 }
 
 void addPCR(
-    void *obj,
+    Common *obj,
     int scc,
     void (*markGray)(void *),
     void (*scan)(void *),
     void (*collectWhite)(void *)
 ) {
+  if (obj->addedPCR) return;
+  obj->addedPCR = 1;
   struct PCR **prev = &pcrs;
   while (*prev != NULL && (*prev)->scc <= scc) {
-    if ((*prev)->obj == obj) return;
     // fprintf(stderr, "[addPCR] prev scc: %d\n", (*prev)->scc);
     prev = &(*prev)->next;
   }
@@ -60,7 +62,9 @@ void addPCR(
   printPCRs();
 }
 
-void removePCR(void *obj) {
+void removePCR(Common *obj) {
+  if (!obj->addedPCR) return;
+  obj->addedPCR = 0;
   struct PCR *head = pcrs;
   struct PCR **prev = &pcrs;
   fprintf(stderr, "[removePCR] Trying to remove %p\n", obj);
@@ -134,8 +138,9 @@ enum Foo_kind { Bar_tag, Baz_tag };
 struct Foo {
   int rc;
   enum Color color;
-  void (*print)();
+  int addedPCR;
   enum Foo_kind kind;
+  void (*print)();
   union {
     struct { int x_Bar; int y_Bar; };
     struct { char* a_Baz; int b_Baz; };
@@ -169,11 +174,11 @@ void $decr_Foo(struct Foo* this) {
     case Baz_tag:
       break;
     }
-    removePCR(this);
+    removePCR((void *) this);
     free(this);
   } else {
     addPCR(
-      this,
+      (void *) this,
       0,
       (void *) $markGray_Foo,
       (void *) $scan_Foo,
@@ -280,6 +285,7 @@ int main() {
   struct Foo* ctorres$3 = malloc(sizeof (struct Foo));
   ctorres$3->rc = 0;
   ctorres$3->color = kBlack;
+  ctorres$3->addedPCR = 0;
   ctorres$3->print = $print_Foo;
   ctorres$3->kind = Bar_tag;
   ctorres$3->x_Bar = 1;

@@ -16,6 +16,7 @@ struct PCR {
 typedef struct {
   int rc;
   enum Color color;
+  int addedPCR;
   int kind;
 } Common;
 struct FreeCell {
@@ -36,15 +37,16 @@ void printPCRs() {
 }
 
 void addPCR(
-    void *obj,
+    Common *obj,
     int scc,
     void (*markGray)(void *),
     void (*scan)(void *),
     void (*collectWhite)(void *)
 ) {
+  if (obj->addedPCR) return;
+  obj->addedPCR = 1;
   struct PCR **prev = &pcrs;
   while (*prev != NULL && (*prev)->scc <= scc) {
-    if ((*prev)->obj == obj) return;
     // fprintf(stderr, "[addPCR] prev scc: %d\n", (*prev)->scc);
     prev = &(*prev)->next;
   }
@@ -60,7 +62,9 @@ void addPCR(
   printPCRs();
 }
 
-void removePCR(void *obj) {
+void removePCR(Common *obj) {
+  if (!obj->addedPCR) return;
+  obj->addedPCR = 0;
   struct PCR *head = pcrs;
   struct PCR **prev = &pcrs;
   fprintf(stderr, "[removePCR] Trying to remove %p\n", obj);
@@ -134,8 +138,9 @@ enum Option_kind { None_tag, Some_tag };
 struct Option {
   int rc;
   enum Color color;
-  void (*print)();
+  int addedPCR;
   enum Option_kind kind;
+  void (*print)();
   union {
     struct {  };
     struct { struct List* value_Some; };
@@ -145,8 +150,9 @@ enum List_kind { List_tag };
 struct List {
   int rc;
   enum Color color;
-  void (*print)();
+  int addedPCR;
   enum List_kind kind;
+  void (*print)();
   int value;
   struct Option* next;
   union {
@@ -196,11 +202,11 @@ void $decr_Option(struct Option* this) {
       $decr_List(this->value_Some);
       break;
     }
-    removePCR(this);
+    removePCR((void *) this);
     free(this);
   } else {
     addPCR(
-      this,
+      (void *) this,
       0,
       (void *) $markGray_Option,
       (void *) $scan_Option,
@@ -215,11 +221,11 @@ void $decr_List(struct List* this) {
       $decr_Option(this->next);
       break;
     }
-    removePCR(this);
+    removePCR((void *) this);
     free(this);
   } else {
     addPCR(
-      this,
+      (void *) this,
       0,
       (void *) $markGray_List,
       (void *) $scan_List,
@@ -367,12 +373,14 @@ int main() {
   struct List* ctorres$0 = malloc(sizeof (struct List));
   ctorres$0->rc = 0;
   ctorres$0->color = kBlack;
+  ctorres$0->addedPCR = 0;
   ctorres$0->print = $print_List;
   ctorres$0->kind = List_tag;
   ctorres$0->value = 1;
   struct Option* ctorres$1 = malloc(sizeof (struct Option));
   ctorres$1->rc = 0;
   ctorres$1->color = kBlack;
+  ctorres$1->addedPCR = 0;
   ctorres$1->print = $print_Option;
   ctorres$1->kind = None_tag;
   ctorres$0->next = ctorres$1;
@@ -382,12 +390,14 @@ int main() {
   struct List* ctorres$2 = malloc(sizeof (struct List));
   ctorres$2->rc = 0;
   ctorres$2->color = kBlack;
+  ctorres$2->addedPCR = 0;
   ctorres$2->print = $print_List;
   ctorres$2->kind = List_tag;
   ctorres$2->value = 2;
   struct Option* ctorres$3 = malloc(sizeof (struct Option));
   ctorres$3->rc = 0;
   ctorres$3->color = kBlack;
+  ctorres$3->addedPCR = 0;
   ctorres$3->print = $print_Option;
   ctorres$3->kind = Some_tag;
   ctorres$3->value_Some = a;
@@ -399,6 +409,7 @@ int main() {
   struct Option* ctorres$4 = malloc(sizeof (struct Option));
   ctorres$4->rc = 0;
   ctorres$4->color = kBlack;
+  ctorres$4->addedPCR = 0;
   ctorres$4->print = $print_Option;
   ctorres$4->kind = Some_tag;
   ctorres$4->value_Some = b;

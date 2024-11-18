@@ -40,6 +40,7 @@ object Translator {
           |typedef struct {
           |  int $RcField;
           |  enum Color $ColorField;
+          |  int addedPCR;
           |  int kind;
           |} Common;
           |struct $FreeCell {
@@ -60,15 +61,16 @@ object Translator {
           |}
           |
           |void addPCR(
-          |    void *obj,
+          |    Common *obj,
           |    int scc,
           |    void (*markGray)(void *),
           |    void (*scan)(void *),
           |    void (*collectWhite)(void *)
           |) {
+          |  if (obj->addedPCR) return;
+          |  obj->addedPCR = 1;
           |  struct PCR **prev = &pcrs;
           |  while (*prev != NULL && (*prev)->scc <= scc) {
-          |    if ((*prev)->obj == obj) return;
           |    // fprintf(stderr, "[addPCR] prev scc: %d\n", (*prev)->scc);
           |    prev = &(*prev)->next;
           |  }
@@ -84,7 +86,9 @@ object Translator {
           |  printPCRs();
           |}
           |
-          |void removePCR(void *obj) {
+          |void removePCR(Common *obj) {
+          |  if (!obj->addedPCR) return;
+          |  obj->addedPCR = 0;
           |  struct PCR *head = pcrs;
           |  struct PCR **prev = &pcrs;
           |  fprintf(stderr, "[removePCR] Trying to remove %p\n", obj);
@@ -249,11 +253,11 @@ object Translator {
       raw"""|fprintf(stderr, "Decrementing ${typ.name} (%p)\n", $This);
             |if (--$This->$RcField == 0) {
             |$deleteCases
-            |  removePCR($This);
+            |  removePCR((void *) $This);
             |  free($This);
             |} else {
             |  addPCR(
-            |    $This,
+            |    (void *) $This,
             |    ${cycles.sccMap(typ)},
             |    (void *) ${MarkGray.name(typ)},
             |    (void *) ${Scan.name(typ)},
@@ -553,8 +557,9 @@ object Translator {
       val struct = s"""|struct $name {
                        |  int $RcField;
                        |  enum Color $ColorField;
-                       |  void (*$PrinterField)();
+                       |  int addedPCR;
                        |  enum ${name}_kind $KindField;
+                       |  void (*$PrinterField)();
                        |$commonFieldsToC
                        |  union {
                        |    $cases
@@ -726,6 +731,7 @@ object Translator {
             s"""|${typeRefToC(typ.name)} $resVar = malloc(sizeof (struct ${typ.name}));
                 |$resVar->$RcField = 0;
                 |$resVar->$ColorField = $Black;
+                |$resVar->addedPCR = 0;
                 |$resVar->$PrinterField = ${Printer.name(typ)};
                 |$resVar->$KindField = ${tagName(ctorName.value)};
                 |$valueSetups""".stripMargin

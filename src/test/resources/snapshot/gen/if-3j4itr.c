@@ -16,6 +16,7 @@ struct PCR {
 typedef struct {
   int rc;
   enum Color color;
+  int addedPCR;
   int kind;
 } Common;
 struct FreeCell {
@@ -36,15 +37,16 @@ void printPCRs() {
 }
 
 void addPCR(
-    void *obj,
+    Common *obj,
     int scc,
     void (*markGray)(void *),
     void (*scan)(void *),
     void (*collectWhite)(void *)
 ) {
+  if (obj->addedPCR) return;
+  obj->addedPCR = 1;
   struct PCR **prev = &pcrs;
   while (*prev != NULL && (*prev)->scc <= scc) {
-    if ((*prev)->obj == obj) return;
     // fprintf(stderr, "[addPCR] prev scc: %d\n", (*prev)->scc);
     prev = &(*prev)->next;
   }
@@ -60,7 +62,9 @@ void addPCR(
   printPCRs();
 }
 
-void removePCR(void *obj) {
+void removePCR(Common *obj) {
+  if (!obj->addedPCR) return;
+  obj->addedPCR = 0;
   struct PCR *head = pcrs;
   struct PCR **prev = &pcrs;
   fprintf(stderr, "[removePCR] Trying to remove %p\n", obj);

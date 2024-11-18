@@ -16,6 +16,7 @@ struct PCR {
 typedef struct {
   int rc;
   enum Color color;
+  int addedPCR;
   int kind;
 } Common;
 struct FreeCell {
@@ -36,15 +37,16 @@ void printPCRs() {
 }
 
 void addPCR(
-    void *obj,
+    Common *obj,
     int scc,
     void (*markGray)(void *),
     void (*scan)(void *),
     void (*collectWhite)(void *)
 ) {
+  if (obj->addedPCR) return;
+  obj->addedPCR = 1;
   struct PCR **prev = &pcrs;
   while (*prev != NULL && (*prev)->scc <= scc) {
-    if ((*prev)->obj == obj) return;
     // fprintf(stderr, "[addPCR] prev scc: %d\n", (*prev)->scc);
     prev = &(*prev)->next;
   }
@@ -60,7 +62,9 @@ void addPCR(
   printPCRs();
 }
 
-void removePCR(void *obj) {
+void removePCR(Common *obj) {
+  if (!obj->addedPCR) return;
+  obj->addedPCR = 0;
   struct PCR *head = pcrs;
   struct PCR **prev = &pcrs;
   fprintf(stderr, "[removePCR] Trying to remove %p\n", obj);
@@ -134,8 +138,9 @@ enum List_kind { Nil_tag, Cons_tag };
 struct List {
   int rc;
   enum Color color;
-  void (*print)();
+  int addedPCR;
   enum List_kind kind;
+  void (*print)();
   union {
     struct {  };
     struct { int value_Cons; struct List* next_Cons; };
@@ -170,11 +175,11 @@ void $decr_List(struct List* this) {
       $decr_List(this->next_Cons);
       break;
     }
-    removePCR(this);
+    removePCR((void *) this);
     free(this);
   } else {
     addPCR(
-      this,
+      (void *) this,
       0,
       (void *) $markGray_List,
       (void *) $scan_List,
@@ -281,24 +286,28 @@ int main() {
   struct List* ctorres$3 = malloc(sizeof (struct List));
   ctorres$3->rc = 0;
   ctorres$3->color = kBlack;
+  ctorres$3->addedPCR = 0;
   ctorres$3->print = $print_List;
   ctorres$3->kind = Cons_tag;
   ctorres$3->value_Cons = 1;
   struct List* ctorres$4 = malloc(sizeof (struct List));
   ctorres$4->rc = 0;
   ctorres$4->color = kBlack;
+  ctorres$4->addedPCR = 0;
   ctorres$4->print = $print_List;
   ctorres$4->kind = Cons_tag;
   ctorres$4->value_Cons = 2;
   struct List* ctorres$5 = malloc(sizeof (struct List));
   ctorres$5->rc = 0;
   ctorres$5->color = kBlack;
+  ctorres$5->addedPCR = 0;
   ctorres$5->print = $print_List;
   ctorres$5->kind = Cons_tag;
   ctorres$5->value_Cons = 4;
   struct List* ctorres$6 = malloc(sizeof (struct List));
   ctorres$6->rc = 0;
   ctorres$6->color = kBlack;
+  ctorres$6->addedPCR = 0;
   ctorres$6->print = $print_List;
   ctorres$6->kind = Nil_tag;
   ctorres$5->next_Cons = ctorres$6;
