@@ -21,7 +21,7 @@ object GenerateTypes {
     * All references are mutable, for testing cycles.
     */
   def genTypesAux(): Gen[List[GenTypeAux]] = {
-    Gen.choose(1, 40).flatMap { numSccs =>
+    Gen.choose(1, 15).flatMap { numSccs =>
       Gen.sequence(0.until(numSccs).map { i =>
         Gen.listOf(Gen.chooseNum(0, i)).map(GenTypeAux(_))
       })
@@ -100,6 +100,7 @@ object GenerateTypes {
 
     def genExpr(typeInd: Int): Gen[Expr] = {
       val GenTypeAux(refs) = typeAuxes(typeInd)
+      // todo create multiple objects and create cycles between them
       val fieldGens = refs.zipWithIndex.map { case (fieldTypeInd, fieldInd) =>
         val fieldName = Spanned(nameForField(fieldInd), Span.synth)
         val value =

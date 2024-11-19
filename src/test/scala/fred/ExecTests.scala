@@ -157,7 +157,7 @@ class ExecTests
 
   test("Simple generated programs") {
     given PropertyCheckConfiguration =
-      PropertyCheckConfiguration(minSize = 1, sizeRange = 5)
+      PropertyCheckConfiguration(minSize = 1, sizeRange = 10)
     forAll(GenerateTypes.genTypesAux().flatMap(GenerateTypes.genCode)) {
       parsedFile => valgrindCheck(parsedFile, "foo.c", None, snapshot = false)
     }
