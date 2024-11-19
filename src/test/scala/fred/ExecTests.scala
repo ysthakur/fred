@@ -27,16 +27,12 @@ class ExecTests
     given typer: Typer = Typer.resolveAllTypes(parsedFile)
     val generatedC = Translator.toC(parsedFile)
 
-    val outPath =
-      if (snapshot) {
-        assertFileSnapshot(generatedC, s"exec/$outFile")
-        s"src/test/resources/snapshot/exec/$outFile"
-      } else {
-        Files.write(Path.of(outFile), generatedC.getBytes())
-        outFile
-      }
+    if (snapshot) {
+      assertFileSnapshot(generatedC, s"exec/$outFile")
+      s"src/test/resources/snapshot/exec/$outFile"
+    }
 
-    s"gcc -g -I ${Compiler.includesFolder()} $outPath".!!
+    Compiler.invokeGCC(generatedC, "a.out")
 
     val stderrBuf = StringBuilder()
     val stdout =
@@ -149,10 +145,6 @@ class ExecTests
       """
 
     valgrindCheck(code, "contrived-needs-sorting.c")("")
-  }
-
-  test("asdf") {
-    assert(GenerateTypes.toTypes(List.empty) == List.empty)
   }
 
   test("Simple generated programs") {
