@@ -14,21 +14,21 @@ class SCCTests
   def createFile(graph: Map[String, Set[(Boolean, String)]]): ParsedFile = {
     ParsedFile(
       graph.map { (name, neighbors) =>
-        val spannedName = Spanned(name, Span.synthetic)
+        val spannedName = Spanned(name, Span.synth)
         val fields = graph(name).toList.map { (mutable, neighborName) =>
           FieldDef(
             mutable,
-            Spanned(s"field$neighborName", Span.synthetic),
-            TypeRef(neighborName, Span.synthetic),
-            Span.synthetic
+            Spanned(s"field$neighborName", Span.synth),
+            TypeRef(neighborName, Span.synth),
+            Span.synth
           )
         }
         TypeDef(
           spannedName,
           List(
-            EnumCase(spannedName, fields, Span.synthetic)
+            EnumCase(spannedName, fields, Span.synth)
           ),
-          Span.synthetic
+          Span.synth
         )
       }.toList,
       Nil
@@ -118,8 +118,8 @@ class SCCTests
   }
 
   test("Ensure strongly-connected components valid using Gen") {
-    forAll(GenerateTypes.genTypes()) { typesAux =>
-      val file = GenerateTypes.generateAst(typesAux)
+    forAll(GenerateTypes.genTypesAux()) { typesAux =>
+      val file = ParsedFile(GenerateTypes.toTypes(typesAux), Nil)
       val cycles = Cycles.fromFile(file)
 
       assert(cycles.sccs.size === typesAux.size)

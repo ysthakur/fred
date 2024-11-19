@@ -1,12 +1,20 @@
 package fred
 
-case class Span(start: Int, end: Int)
-
-object Span {
-  def synthetic = Span(-1, -1)
+case class Span(start: Int, end: Int) {
+  override def toString =
+    if (start == -1 && end == -1) "(:)"
+    else s"($start:$end)"
 }
 
-case class Spanned[T](value: T, span: Span)
+object Span {
+
+  /** A dummy span to use for generated code */
+  def synth = Span(-1, -1)
+}
+
+case class Spanned[T](value: T, span: Span) {
+  override def toString: String = value.toString
+}
 
 case class ParsedFile(typeDefs: List[TypeDef], fns: List[FnDef])
 
@@ -90,8 +98,12 @@ enum BinOp(val text: String) {
   case Seq extends BinOp(";")
 }
 
-case class BinExpr(lhs: Expr, op: Spanned[BinOp], rhs: Expr, typ: Option[Type])
-    extends Expr {
+case class BinExpr(
+    lhs: Expr,
+    op: Spanned[BinOp],
+    rhs: Expr,
+    typ: Option[Type] = None
+) extends Expr {
   override def span = Span(lhs.span.start, rhs.span.end)
 }
 
@@ -105,8 +117,7 @@ case class IfExpr(cond: Expr, thenBody: Expr, elseBody: Expr, span: Span)
   override def typ = None
 }
 
-/** An expression for setting a field on a variable
-  */
+/** An expression for setting a field on a variable */
 case class SetFieldExpr(
     lhsObj: Spanned[String],
     lhsField: Spanned[String],
@@ -116,8 +127,7 @@ case class SetFieldExpr(
   override def typ = None
 }
 
-/** What a variable reference can resolve to
-  */
+/** What a variable reference can resolve to */
 enum VarDef {
   case Let(expr: LetExpr, typ: Type)
   case Param(param: fred.Param, typ: Type)

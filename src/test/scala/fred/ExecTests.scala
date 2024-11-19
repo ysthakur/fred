@@ -1,21 +1,42 @@
 package fred
 
 import org.scalatest.funsuite.AnyFunSuite
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import snapshot4s.scalatest.SnapshotAssertions
 import snapshot4s.generated.snapshotConfig
 
 import scala.sys.process.*
 import java.nio.file.Paths
+import java.nio.file.Files
+import java.nio.file.Path
 
-class ExecTests extends AnyFunSuite with SnapshotAssertions {
-  def valgrindCheck(code: String, outFile: String)(expected: String) = {
-    val parsedFile = Parser.parse(code)
+class ExecTests
+    extends AnyFunSuite,
+      SnapshotAssertions,
+      ScalaCheckPropertyChecks {
+  def valgrindCheck(code: String, outFile: String)(expected: String): Unit = {
+    valgrindCheck(Parser.parse(code), outFile, Some(expected), snapshot = true)
+  }
+
+  def valgrindCheck(
+      parsedFile: ParsedFile,
+      outFile: String,
+      expected: Option[String],
+      snapshot: Boolean
+  ): Unit = {
     given typer: Typer = Typer.resolveAllTypes(parsedFile)
     val generatedC = Translator.toC(parsedFile)
 
-    assertFileSnapshot(generatedC, s"exec/$outFile")
+    val outPath =
+      if (snapshot) {
+        assertFileSnapshot(generatedC, s"exec/$outFile")
+        s"src/test/resources/snapshot/exec/$outFile"
+      } else {
+        Files.write(Path.of(outFile), generatedC.getBytes())
+        outFile
+      }
 
-    s"gcc -g -I ${Compiler.includesFolder()} src/test/resources/snapshot/exec/$outFile".!!
+    s"gcc -g -I ${Compiler.includesFolder()} $outPath".!!
 
     val stderrBuf = StringBuilder()
     val stdout =
@@ -29,7 +50,11 @@ class ExecTests extends AnyFunSuite with SnapshotAssertions {
           throw RuntimeException(stderrBuf.toString, e)
       }
     val valgrindOut = stderrBuf.toString
-    assert(stdout.trim() === expected.trim(), valgrindOut)
+    expected match {
+      case Some(expected) =>
+        assert(stdout.trim() === expected.trim(), valgrindOut)
+      case None =>
+    }
     assert(valgrindOut.contains("ERROR SUMMARY: 0 errors"), valgrindOut)
   }
 
@@ -124,5 +149,17 @@ class ExecTests extends AnyFunSuite with SnapshotAssertions {
       """
 
     valgrindCheck(code, "contrived-needs-sorting.c")("")
+  }
+
+  test("asdf") {
+    assert(GenerateTypes.toTypes(List.empty) == List.empty)
+  }
+
+  test("Simple generated programs") {
+    given PropertyCheckConfiguration =
+      PropertyCheckConfiguration(minSize = 1, sizeRange = 5)
+    forAll(GenerateTypes.genTypesAux().flatMap(GenerateTypes.genCode)) {
+      parsedFile => valgrindCheck(parsedFile, "foo.c", None, snapshot = false)
+    }
   }
 }

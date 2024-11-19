@@ -17,7 +17,7 @@ enum BuiltinType extends Type {
     }
   }
 
-  override def span = Span.synthetic
+  override def span = Span.synth
 }
 
 case class TypeDef(
