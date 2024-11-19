@@ -4,172 +4,7 @@ import scala.util.Random
 import scala.collection.mutable
 
 object Translator {
-  private val KindField = "kind"
-  private val RcField = "rc"
-  private val PrinterField = "print"
   private val This = "this"
-  private val Black = "kBlack"
-  private val Gray = "kGray"
-  private val White = "kWhite"
-  private val ColorField = "color"
-
-  /** Name of the type for potential cyclic roots */
-  private val PCR = "PCR"
-
-  /** Name of the type for nodes in the free list */
-  private val FreeCell = "FreeCell"
-
-  /** Header as in the stuff that's at the top of the file, not as in .h files
-    */
-  private val CommonHeaderCode =
-    raw"""|#include <stdlib.h>
-          |#include <stdio.h>
-          |
-          |enum Color { $Black, $Gray, $White };
-          |
-          |struct PCR {
-          |  void *obj;
-          |  void (*markGray)(void *);
-          |  void (*scan)(void *);
-          |  void (*collectWhite)(void *);
-          |  struct PCR *next;
-          |};
-          |
-          |struct PCRBucket {
-          |  int scc;
-          |  struct PCR *first;
-          |  struct PCR *last;
-          |  struct PCRBucket *next;
-          |};
-          |
-          |// Common object header
-          |typedef struct {
-          |  int $RcField;
-          |  enum Color $ColorField;
-          |  int addedPCR;
-          |  int kind;
-          |} Common;
-          |struct $FreeCell {
-          |  Common *obj;
-          |  struct $FreeCell *next;
-          |  void (*free)(void *);
-          |};
-          |
-          |struct PCRBucket *pcrBuckets = NULL;
-          |struct $FreeCell *freeList = NULL;
-          |
-          |void addPCR(
-          |    Common *obj,
-          |    int scc,
-          |    void (*markGray)(void *),
-          |    void (*scan)(void *),
-          |    void (*collectWhite)(void *)
-          |) {
-          |  if (obj->addedPCR) return;
-          |  obj->addedPCR = 1;
-          |
-          |  struct PCRBucket **prev = &pcrBuckets;
-          |  while (*prev != NULL && (*prev)->scc < scc) {
-          |    // fprintf(stderr, "[addPCR] prev scc: %d\n", (*prev)->scc);
-          |    prev = &(*prev)->next;
-          |  }
-          |
-          |  struct PCR *pcr = malloc(sizeof(struct PCR));
-          |  fprintf(stderr, "[addPCR] Added PCR %p, prev = %p, scc: %d\n", pcr, *prev, scc);
-          |  pcr->obj = obj;
-          |  pcr->markGray = markGray;
-          |  pcr->scan = scan;
-          |  pcr->collectWhite = collectWhite;
-          |  pcr->next = NULL;
-          |
-          |  if (*prev == NULL || scc < (*prev)->scc) {
-          |    struct PCRBucket *newBucket = malloc(sizeof(struct PCRBucket));
-          |    newBucket->scc = scc;
-          |    newBucket->first = pcr;
-          |    newBucket->last = pcr;
-          |    newBucket->next = *prev;
-          |    *prev = newBucket;
-          |  } else {
-          |    (*prev)->last->next = pcr;
-          |    (*prev)->last = pcr;
-          |  }
-          |}
-          |
-          |void removePCR(Common *obj, int scc) {
-          |  if (!obj->addedPCR) return;
-          |  obj->addedPCR = 0;
-          |  fprintf(stderr, "[removePCR] Trying to remove %p\n", obj);
-          |
-          |  struct PCRBucket *bucket = pcrBuckets;
-          |  while (bucket->scc != scc) {
-          |    bucket = bucket->next;
-          |  }
-          |
-          |  struct PCR *head = bucket->first;
-          |  struct PCR **prev = &bucket->first;
-          |  while (head != NULL) {
-          |    fprintf(stderr, "[removePCR] head = %p\n", head);
-          |    if (head->obj == obj) {
-          |      fprintf(stderr, "[removePCR] Removed %p\n", head);
-          |      struct PCR *next = head->next;
-          |      free(head);
-          |      *prev = next;
-          |      break;
-          |    } else {
-          |      prev = &head->next;
-          |      head = head->next;
-          |    }
-          |  }
-          |}
-          |
-          |void markGrayAllPCRs(struct PCR *head) {
-          |  if (head == NULL) return;
-          |  struct PCR *next = head->next;
-          |  head->markGray(head->obj);
-          |  markGrayAllPCRs(next);
-          |}
-          |
-          |void scanAllPCRs(struct PCR *head) {
-          |  if (head == NULL) return;
-          |  struct PCR *next = head->next;
-          |  head->scan(head->obj);
-          |  scanAllPCRs(next);
-          |}
-          |
-          |void collectWhiteAllPCRs(struct PCR *head) {
-          |  if (head == NULL) return;
-          |  struct PCR *next = head->next;
-          |  head->collectWhite(head->obj);
-          |  free(head);
-          |  collectWhiteAllPCRs(next);
-          |}
-          |
-          |void collectFreeList() {
-          |  while (freeList != NULL) {
-          |    struct $FreeCell *next = freeList->next;
-          |    (freeList->free)(freeList->obj);
-          |    free(freeList);
-          |    freeList = next;
-          |  }
-          |}
-          |
-          |void processAllPCRs() {
-          |  while (pcrBuckets != NULL) {
-          |    markGrayAllPCRs(pcrBuckets->first);
-          |    scanAllPCRs(pcrBuckets->first);
-          |    if (freeList != NULL) {
-          |      fprintf(stderr, "Free list should be null\n");
-          |      exit(1);
-          |    }
-          |    collectWhiteAllPCRs(pcrBuckets->first);
-          |    collectFreeList();
-          |    fprintf(stderr, "[processAllPCRs]: Processed scc %d\n", pcrBuckets->scc);
-          |    struct PCRBucket *next = pcrBuckets->next;
-          |    free(pcrBuckets);
-          |    pcrBuckets = next;
-          |  }
-          |}
-          |""".stripMargin
 
   private val NoMangleFns = Set("main", "printf")
 
@@ -188,7 +23,7 @@ object Translator {
         + fnDecls.mkString("", "\n", "\n")
         + genImpls.mkString("", "\n", "\n")
         + fnImpls.mkString("", "\n", "\n")
-    CommonHeaderCode + generated
+    "#include \"runtime.h\"\n\n" + generated
       .replaceAll(raw"\n(\s|\n)*\n", "\n")
       .strip() + "\n"
   }
@@ -272,7 +107,7 @@ object Translator {
                          |}""".stripMargin
 
       raw"""|fprintf(stderr, "Decrementing ${typ.name} (%p)\n", $This);
-            |if (--$This->$RcField == 0) {
+            |if (--$This->rc == 0) {
             |$deleteCases
             |  removePCR((void *) $This, $scc);
             |  free($This);
@@ -295,7 +130,7 @@ object Translator {
               bindings.types(fieldTypeRef.name) match {
                 case fieldType: TypeDef =>
                   if (cycles.sccMap(fieldType) == myScc) {
-                    s"""|$This->$mangled->$RcField --;
+                    s"""|$This->$mangled->rc --;
                         |${MarkGray.name(fieldType)}($This->$mangled);""".stripMargin
                   } else {
                     ""
@@ -306,8 +141,8 @@ object Translator {
             .mkString("\n")
         }
 
-      s"""|if ($This->$ColorField == $Gray) return;
-          |$This->$ColorField = $Gray;
+      s"""|if ($This->color == kGray) return;
+          |$This->color = kGray;
           |$recMarks""".stripMargin
     }
   }
@@ -335,12 +170,12 @@ object Translator {
             .mkString("\n")
         }
 
-      s"""|if ($This->$ColorField != $Gray) return;
-          |if ($This->$RcField > 0) {
+      s"""|if ($This->color != kGray) return;
+          |if ($This->rc > 0) {
           |  ${ScanBlack.name(typ)}($This);
           |  return;
           |}
-          |$This->$ColorField = $White;
+          |$This->color = kWhite;
           |$recScan""".stripMargin
     }
   }
@@ -360,7 +195,7 @@ object Translator {
               bindings.types(fieldTypeRef.name) match {
                 case fieldType: TypeDef =>
                   if (cycles.sccMap(fieldType) == myScc) {
-                    s"""|$This->$mangled->$RcField ++;
+                    s"""|$This->$mangled->rc ++;
                         |${ScanBlack.name(fieldType)}($This->$mangled);""".stripMargin
                   } else {
                     ""
@@ -371,8 +206,8 @@ object Translator {
             .mkString("\n")
         }
       }
-      s"""|if ($This->$ColorField != $Black) {
-          |  $This->$ColorField = $Black;
+      s"""|if ($This->color != kBlack) {
+          |  $This->color = kBlack;
           |$recScan
           |}""".stripMargin
     }
@@ -399,12 +234,12 @@ object Translator {
             .mkString("\n")
         }
       }
-      raw"""|if ($This->$ColorField == $White) {
-            |  $This->$ColorField = $Black;
+      raw"""|if ($This->color == kWhite) {
+            |  $This->color = kBlack;
             |$rec
             |  fprintf(stderr, "Removing ${typ.name}\n");
-            |  struct $FreeCell *curr = freeList;
-            |  freeList = malloc(sizeof(struct $FreeCell));
+            |  struct FreeCell *curr = freeList;
+            |  freeList = malloc(sizeof(struct FreeCell));
             |  freeList->obj = (void *) $This;
             |  freeList->next = curr;
             |  freeList->free = (void *) ${Freer.name(typ)};
@@ -448,7 +283,7 @@ object Translator {
             |  break;""".stripMargin
       }
       .mkString("\n")
-    s"""|switch ($expr->$KindField) {
+    s"""|switch ($expr->kind) {
         |$armsToC
         |}""".stripMargin
   }
@@ -477,7 +312,7 @@ object Translator {
 
   private def incrRc(expr: String, typ: Type) = {
     if (typ.isInstanceOf[TypeDef]) {
-      s"$expr->$RcField ++;"
+      s"$expr->rc ++;"
     } else {
       ""
     }
@@ -569,11 +404,11 @@ object Translator {
       mangledFieldsFor.put(typ, mangledFields.toMap)
 
       val struct = s"""|struct $name {
-                       |  int $RcField;
-                       |  enum Color $ColorField;
+                       |  int rc;
+                       |  enum Color color;
                        |  int addedPCR;
-                       |  enum ${name}_kind $KindField;
-                       |  void (*$PrinterField)();
+                       |  enum ${name}_kind kind;
+                       |  void (*print)();
                        |$commonFieldsToC
                        |  union {
                        |    $cases
@@ -743,11 +578,11 @@ object Translator {
             .mkString("\n")
           val setup =
             s"""|${typeRefToC(typ.name)} $resVar = malloc(sizeof (struct ${typ.name}));
-                |$resVar->$RcField = 0;
-                |$resVar->$ColorField = $Black;
+                |$resVar->rc = 0;
+                |$resVar->color = kBlack;
                 |$resVar->addedPCR = 0;
-                |$resVar->$PrinterField = ${Printer.name(typ)};
-                |$resVar->$KindField = ${tagName(ctorName.value)};
+                |$resVar->print = ${Printer.name(typ)};
+                |$resVar->kind = ${tagName(ctorName.value)};
                 |$valueSetups""".stripMargin
           (setup, resVar, "")
         case matchExpr @ MatchExpr(obj, arms, _) =>
@@ -805,7 +640,7 @@ object Translator {
           val setup = s"""|$objSetup
                           |${typeRefToC(objType.name)} $objVar = $objToC;
                           |${typeRefToC(resType.name)} $resVar;
-                          |switch ($objVar->$KindField) {
+                          |switch ($objVar->kind) {
                           |${armsToC.mkString("\n")}
                           |}
                           |${incrRc(resVar, resType)}

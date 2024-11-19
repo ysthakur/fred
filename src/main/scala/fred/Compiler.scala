@@ -3,8 +3,11 @@ package fred
 import scala.sys.process.*
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.Paths
 
 object Compiler {
+  private val RuntimeHeader = "runtime/runtime.h"
+
   def compile(code: String, outC: Path, outExe: String): Unit = {
     val parsedFile = Parser.parse(code)
     given typer: Typer =
@@ -19,6 +22,13 @@ object Compiler {
       }
     val generatedC = Translator.toC(parsedFile)
     Files.write(outC, generatedC.getBytes())
-    println(s"gcc ${outC.toAbsolutePath()}".!!)
+    println(s"gcc -I ${includesFolder()} ${outC.toAbsolutePath()}".!!)
+  }
+
+  /** Path to the folder with header files to include */
+  def includesFolder(): String = {
+    val runtimeFile =
+      this.getClass().getClassLoader().getResource(RuntimeHeader).toURI()
+    Paths.get(runtimeFile).getParent().toString()
   }
 }

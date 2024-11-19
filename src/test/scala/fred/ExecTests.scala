@@ -15,7 +15,7 @@ class ExecTests extends AnyFunSuite with SnapshotAssertions {
 
     assertFileSnapshot(generatedC, s"exec/$outFile")
 
-    s"gcc -g src/test/resources/snapshot/exec/$outFile".!!
+    s"gcc -g -I ${Compiler.includesFolder()} src/test/resources/snapshot/exec/$outFile".!!
 
     val stderrBuf = StringBuilder()
     val stdout =
