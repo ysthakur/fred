@@ -1,10 +1,14 @@
 package fred
 
 import org.scalatest.funsuite.AnyFunSuite
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import snapshot4s.scalatest.SnapshotAssertions
 import snapshot4s.generated.snapshotConfig
 
-class SCCTests extends AnyFunSuite with SnapshotAssertions {
+class SCCTests
+    extends AnyFunSuite,
+      SnapshotAssertions,
+      ScalaCheckPropertyChecks {
 
   /** This is just a helper to avoid typing out calls to the TypeDef ctor */
   def createFile(graph: Map[String, Set[(Boolean, String)]]): ParsedFile = {
@@ -111,5 +115,29 @@ class SCCTests extends AnyFunSuite with SnapshotAssertions {
 
     val cycles = Cycles.fromFile(file)
     assert(cycles.badSCCs.isEmpty)
+  }
+
+  test("Ensure strongly-connected components valid using Gen") {
+    forAll(GenerateTypes.genTypes()) { typesAux =>
+      val file = GenerateTypes.generateAst(typesAux)
+      val cycles = Cycles.fromFile(file)
+
+      assert(cycles.sccs.size === typesAux.size)
+
+      val bindings = Bindings.fromFile(file)
+      for {
+        typ <- file.typeDefs
+        field <- typ.cases.head.fields
+      } do {
+        bindings.getType(field.typ) match {
+          case td: TypeDef =>
+            assert(
+              cycles.sccMap(typ) <= cycles.sccMap(td),
+              typesAux.mkString("\n") + "---\n" + cycles.sccs.map(_.map(_.name))
+            )
+          case _ => {}
+        }
+      }
+    }
   }
 }
