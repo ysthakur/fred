@@ -325,13 +325,6 @@ void $decr_CtxRef(struct CtxRef* this) {
     }
     removePCR((void *) this, 0);
     free(this);
-  } else {
-    addPCR(
-      (void *) this,
-      0,
-      (void *) $markGray_CtxRef,
-      (void *) $scan_CtxRef,
-      (void *) $collectWhite_CtxRef);
   }
 }
 void $decr_Context(struct Context* this) {

@@ -13,7 +13,7 @@ import scala.collection.mutable
 case class Cycles(
     sccs: List[Set[TypeDef]],
     sccMap: Map[TypeDef, Int],
-    badSCCs: List[Int]
+    badSCCs: Set[Int]
 )
 
 object Cycles {
@@ -39,7 +39,7 @@ object Cycles {
       }
       .map(_._2)
 
-    Cycles(sccs, sccMap, badSCCs)
+    Cycles(sccs, sccMap, badSCCs.toSet)
   }
 
   /** Get a list of SCCs, sorted topologically. Uses Tarjan's strongly-connected

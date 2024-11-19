@@ -187,13 +187,6 @@ void $decr_Foo(struct Foo* this) {
     }
     removePCR((void *) this, 0);
     free(this);
-  } else {
-    addPCR(
-      (void *) this,
-      0,
-      (void *) $markGray_Foo,
-      (void *) $scan_Foo,
-      (void *) $collectWhite_Foo);
   }
 }
 void $markGray_Foo(struct Foo* this) {

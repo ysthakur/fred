@@ -93,7 +93,7 @@ class SCCTests extends AnyFunSuite with SnapshotAssertions {
 
     val cycles = Cycles.fromFile(file)
     assert(cycles.sccs.size === 1)
-    assert(cycles.badSCCs === List(0))
+    assert(cycles.badSCCs === Set(0))
   }
 
   test("Is basic good SCC not incorrectly marked bad") {

@@ -261,20 +261,22 @@ object Translator {
         }
       }
       val scc = cycles.sccMap(typ)
+      // No need to add a PCR if this type isn't in a bad SCC
+      val addPCR = raw"""| else {
+                         |  addPCR(
+                         |    (void *) $This,
+                         |    $scc,
+                         |    (void *) ${MarkGray.name(typ)},
+                         |    (void *) ${Scan.name(typ)},
+                         |    (void *) ${CollectWhite.name(typ)});
+                         |}""".stripMargin
 
       raw"""|fprintf(stderr, "Decrementing ${typ.name} (%p)\n", $This);
             |if (--$This->$RcField == 0) {
             |$deleteCases
             |  removePCR((void *) $This, $scc);
             |  free($This);
-            |} else {
-            |  addPCR(
-            |    (void *) $This,
-            |    $scc,
-            |    (void *) ${MarkGray.name(typ)},
-            |    (void *) ${Scan.name(typ)},
-            |    (void *) ${CollectWhite.name(typ)});
-            |}""".stripMargin
+            |}${if (cycles.badSCCs.contains(scc)) addPCR else ""}""".stripMargin
     }
   }
 

@@ -76,6 +76,16 @@ class TranslatorTests extends AnyFunSuite with SnapshotAssertions {
     assertFileSnapshot(generated.toString, "gen/fn-call-83jief.c")
   }
 
+  test("Types in good SCCs shouldn't be marked as PCRs") {
+    // There's no possibility of cycles here, because all references are immutable
+    val parsed = Parser.parse("""
+      data Rec = Rec { rec: Rec }
+      """)
+    given Typer = Typer.resolveAllTypes(parsed)
+    val generated = Translator.toC(parsed)
+    assertFileSnapshot(generated.toString, "gen/good-scc-jifs893.c")
+  }
+
   test("Complex test") {
     val parsed = Parser.parse("""
       data Foo
