@@ -4,6 +4,7 @@ import org.scalatest.funsuite.AnyFunSuite
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import snapshot4s.scalatest.SnapshotAssertions
 import snapshot4s.generated.snapshotConfig
+import org.scalacheck.Gen
 
 class SCCTests
     extends AnyFunSuite,
@@ -13,24 +14,11 @@ class SCCTests
   /** This is just a helper to avoid typing out calls to the TypeDef ctor */
   def createFile(graph: Map[String, Set[(Boolean, String)]]): ParsedFile = {
     ParsedFile(
-      graph.map { (name, neighbors) =>
-        val spannedName = Spanned(name, Span.synth)
-        val fields = graph(name).toList.map { (mutable, neighborName) =>
-          FieldDef(
-            mutable,
-            Spanned(s"field$neighborName", Span.synth),
-            TypeRef(neighborName, Span.synth),
-            Span.synth
-          )
-        }
-        TypeDef(
-          spannedName,
-          List(
-            EnumCase(spannedName, fields, Span.synth)
-          ),
-          Span.synth
-        )
-      }.toList,
+      GenerateTypes.toTypeDefs(
+        graph
+          .mapValues(_.map((mut, typeName) => (mut, s"f$typeName", typeName)))
+          .toMap
+      ),
       Nil
     )
   }
@@ -117,27 +105,62 @@ class SCCTests
     assert(cycles.badSCCs.isEmpty)
   }
 
-  test("Ensure strongly-connected components valid using Gen") {
-    forAll(GenerateTypes.genTypesAux()) { typesAux =>
-      val file = ParsedFile(GenerateTypes.toTypes(typesAux), Nil)
-      val cycles = Cycles.fromFile(file)
-
-      assert(cycles.sccs.size === typesAux.size)
-
-      val bindings = Bindings.fromFile(file)
-      for {
-        typ <- file.typeDefs
-        field <- typ.cases.head.fields
-      } do {
-        bindings.getType(field.typ) match {
-          case td: TypeDef =>
-            assert(
-              cycles.sccMap(typ) <= cycles.sccMap(td),
-              typesAux.mkString("\n") + "---\n" + cycles.sccs.map(_.map(_.name))
-            )
-          case _ => {}
-        }
+  def validateSccs(file: ParsedFile, cycles: Cycles) = {
+    val bindings = Bindings.fromFile(file)
+    for {
+      typ <- file.typeDefs
+      field <- typ.cases.head.fields
+    } do {
+      bindings.getType(field.typ) match {
+        case td: TypeDef =>
+          assert(cycles.sccMap(typ) <= cycles.sccMap(td))
+        case _ => {}
       }
+    }
+  }
+
+  test("SCCs valid for totally random types") {
+    // Generate types completely randomly and check if the SCCs make sense.
+    // This doesn't check that the algorithm doesn't lump every single type
+    // into the same SCC.
+    val gen = for {
+      size <- Gen.size
+      numSccs <-
+        if (size == 0) Gen.fail else Gen.choose(1, math.sqrt(size).toInt)
+      typesAux <- Gen.listOfN(
+        numSccs,
+        Gen.listOf(Gen.choose(0, numSccs - 1)).map(GenerateTypes.GenTypeAux(_))
+      )
+    } yield typesAux
+
+    forAll(gen) { typesAux =>
+      val file = createFileImmutable(typesAux.zipWithIndex.map {
+        (typesAux, i) => s"T$i" -> typesAux.refs.map(ref => s"T$ref").toSet
+      }.toMap)
+      val cycles = Cycles.fromFile(file)
+      validateSccs(file, cycles)
+    }
+  }
+
+  test("SCCs valid for not-so-arbitrary types") {
+    // Ensure that the algorithm doesn't lump every type into the same SCC
+
+    // Generate a bunch of types. Types that come later in the list can only have
+    // references to types that come earlier in the list (or themselves).
+    // Therefore, each type is its own strongly-connected component.
+    val gen = Gen.sized { numSccs =>
+      GenerateTypes.sequence(0.until(numSccs).map { i =>
+        Gen.listOf(Gen.chooseNum(0, i)).map(GenerateTypes.GenTypeAux(_))
+      })
+    }
+
+    forAll(gen) { typesAux =>
+      val file = createFileImmutable(typesAux.zipWithIndex.map {
+        (typesAux, i) => s"T$i" -> typesAux.refs.map(ref => s"T$ref").toSet
+      }.toMap)
+      val cycles = Cycles.fromFile(file)
+      assert(cycles.sccs.size === typesAux.size)
+      validateSccs(file, cycles)
     }
   }
 }

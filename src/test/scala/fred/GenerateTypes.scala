@@ -10,6 +10,9 @@ object GenerateTypes {
 
   case class GenTypeAux(refs: List[Int])
 
+  def sequence[T](gens: Iterable[Gen[T]]): Gen[List[T]] =
+    Gen.sequence[List[T], T](gens)
+
   /** Generate a bunch of types. Each type is its own strongly-connected
     * component. The returned list is sorted backwards (types that come later in
     * the list can have references to types that come earlier in the list).
@@ -22,7 +25,7 @@ object GenerateTypes {
     */
   def genTypesAux(): Gen[List[GenTypeAux]] = {
     Gen.choose(1, 15).flatMap { numSccs =>
-      Gen.sequence(0.until(numSccs).map { i =>
+      sequence(0.until(numSccs).map { i =>
         Gen.listOf(Gen.chooseNum(0, i)).map(GenTypeAux(_))
       })
     }
@@ -37,7 +40,38 @@ object GenerateTypes {
 
   private def nameForField(ind: Int) = s"f$ind"
 
-  def toTypes(typeAuxes: List[GenTypeAux]): List[TypeDef] = {
+  /** Turn a graph of TypeDef names into a list of TypeDefs
+    *
+    * @param graph
+    *   Maps TypeDef names to their fields. Fields are `(mutable, fieldName,
+    *   fieldTypeName)`
+    * @return
+    */
+  def toTypeDefs(
+      graph: Map[String, Set[(Boolean, String, String)]]
+  ): List[TypeDef] = {
+    graph.map { (name, neighbors) =>
+      val spannedName = Spanned(name, Span.synth)
+      val fields = graph(name).toList.map {
+        (mutable, fieldName, neighborName) =>
+          FieldDef(
+            mutable,
+            Spanned(fieldName, Span.synth),
+            TypeRef(neighborName, Span.synth),
+            Span.synth
+          )
+      }
+      TypeDef(
+        spannedName,
+        List(
+          EnumCase(spannedName, fields, Span.synth)
+        ),
+        Span.synth
+      )
+    }.toList
+  }
+
+  def toTypesWithOpts(typeAuxes: List[GenTypeAux]): List[TypeDef] = {
     val types = typeAuxes.zipWithIndex.map { case (GenTypeAux(refs), i) =>
       val typeName = Spanned(nameForType(i), Span.synth)
       TypeDef(
@@ -96,7 +130,7 @@ object GenerateTypes {
   }
 
   def genCode(typeAuxes: List[GenTypeAux]): Gen[ParsedFile] = {
-    val types = toTypes(typeAuxes)
+    val types = toTypesWithOpts(typeAuxes)
 
     def genExpr(typeInd: Int): Gen[Expr] = {
       val GenTypeAux(refs) = typeAuxes(typeInd)
@@ -118,10 +152,10 @@ object GenerateTypes {
         value.map((fieldName, _))
       }
       // TODO Why in the world is this an ArrayList?
-      Gen.sequence(fieldGens).map { fields =>
+      sequence(fieldGens).map { fields =>
         CtorCall(
           Spanned(nameForType(typeInd), Span.synth),
-          fields.asScala.toList,
+          fields,
           Span.synth
         )
       }
@@ -146,5 +180,87 @@ object GenerateTypes {
         )
       )
     }
+  }
+
+  /** Generate a tree of types. Each type `T$typeNum` will have some number of
+    * references to itself, but indirectly, through an `OptT$typeNum` type. That
+    * way, you can reassign the field holding the optional value to create
+    * cycles.
+    *
+    * @param maxSelfRefs
+    *   How many references to itself each type should have at most
+    * @return
+    *   The first element is the actual type, while the second element is all
+    *   the types it refers to, as well as the optional types corresponding to
+    *   each type.
+    */
+  def genTypeTree(maxSelfRefs: Int): Gen[(TypeDef, List[TypeDef])] = {
+    var typeNum = 0
+    def helper(): Gen[(TypeDef, List[TypeDef])] = {
+      for {
+        size <- Gen.size
+        numSelfRefs <- Gen.choose(0, maxSelfRefs)
+        numOtherRefs <- Gen.geometric(2.0)
+        otherTypes <- Gen.listOfN(numOtherRefs, helper())
+      } yield {
+        typeNum += 1
+        val (fieldTypes, rest) = otherTypes.unzip
+        val typeName = s"T$typeNum"
+        val optTypeName = s"OptT$typeNum"
+        val selfRefFields = 1.to(numSelfRefs).map { fieldInd =>
+          FieldDef(
+            true,
+            Spanned(s"self$fieldInd", Span.synth),
+            TypeRef(optTypeName, Span.synth),
+            Span.synth
+          )
+        }
+        val otherRefFields = fieldTypes.zipWithIndex.map { (typ, fieldInd) =>
+          FieldDef(
+            true,
+            Spanned(s"f$fieldInd", Span.synth),
+            TypeRef(typ.name, Span.synth),
+            Span.synth
+          )
+        }
+        val thisType = TypeDef(
+          Spanned(typeName, Span.synth),
+          List(
+            EnumCase(
+              Spanned(typeName, Span.synth),
+              selfRefFields ++ otherRefFields,
+              Span.synth
+            )
+          ),
+          Span.synth
+        )
+        val optType = TypeDef(
+          Spanned(optTypeName, Span.synth),
+          List(
+            EnumCase(
+              Spanned(s"Some$typeName", Span.synth),
+              List(
+                FieldDef(
+                  false,
+                  Spanned("value", Span.synth),
+                  TypeRef(typeName, Span.synth),
+                  Span.synth
+                )
+              ),
+              Span.synth
+            ),
+            EnumCase(
+              Spanned(s"None$typeName", Span.synth),
+              Nil,
+              Span.synth
+            )
+          ),
+          Span.synth
+        )
+        (thisType, optType :: fieldTypes ::: rest.flatten)
+      }
+    }
+
+    helper()
   }
 }

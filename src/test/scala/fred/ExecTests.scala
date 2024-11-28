@@ -1,14 +1,16 @@
 package fred
 
-import org.scalatest.funsuite.AnyFunSuite
-import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
-import snapshot4s.scalatest.SnapshotAssertions
-import snapshot4s.generated.snapshotConfig
-
 import scala.sys.process.*
 import java.nio.file.Paths
 import java.nio.file.Files
 import java.nio.file.Path
+
+import org.scalacheck.Gen
+import org.scalatest.funsuite.AnyFunSuite
+import org.scalatest.tagobjects.Slow
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+import snapshot4s.scalatest.SnapshotAssertions
+import snapshot4s.generated.snapshotConfig
 
 class ExecTests
     extends AnyFunSuite,
@@ -152,6 +154,99 @@ class ExecTests
       PropertyCheckConfiguration(minSize = 1, sizeRange = 10)
     forAll(GenerateTypes.genTypesAux().flatMap(GenerateTypes.genCode)) {
       parsedFile => valgrindCheck(parsedFile, "foo.c", None, snapshot = false)
+    }
+  }
+
+  test("Generated programs 1", Slow) {
+    given PropertyCheckConfiguration =
+      PropertyCheckConfiguration(minSize = 1, sizeRange = 10)
+
+    /** Generate an expression creating one or more objects of the given type,
+      * each assigned to a variable
+      *
+      * @return
+      *   The first element of the tuple is a function that takes the body to
+      *   create a let expression out of, and the second element is the names of
+      *   the variables created
+      */
+    def genObjs(
+        typ: TypeDef,
+        allTypes: Map[String, TypeDef]
+    ): Gen[(Expr => Expr, List[String])] = {
+      val ctorDef = typ.cases.head
+      val (selfFields, otherFields) =
+        ctorDef.fields.partition(_.name.value.startsWith("self"))
+      for {
+        size <- Gen.size
+        numObjs <- Gen.posNum[Int]
+        (prevExprs, prevVarss) <- GenerateTypes
+          .sequence(otherFields.map { field =>
+            genObjs(allTypes(field.typ.name), allTypes)
+          })
+          .map(_.unzip)
+        objs <- GenerateTypes.sequence(1.to(numObjs).map { i =>
+          val selfFieldArgs = selfFields.zipWithIndex.map { (field, fieldInd) =>
+            Spanned(field.name.value, Span.synth) -> CtorCall(
+              Spanned(s"None${typ.name}", Span.synth),
+              Nil,
+              Span.synth
+            )
+          }
+          GenerateTypes
+            .sequence(otherFields.zipWithIndex.map { (field, fieldInd) =>
+              Gen.oneOf(prevVarss(fieldInd)).map { varName =>
+                Spanned(field.name.value, Span.synth) -> VarRef(
+                  varName,
+                  None,
+                  Span.synth
+                )
+              }
+            })
+            .map { otherFieldArgs =>
+              CtorCall(
+                Spanned(ctorDef.name.value, Span.synth),
+                otherFieldArgs ++ selfFieldArgs,
+                Span.synth
+              )
+            }
+        })
+      } yield {
+        // Variable names for the objects that are going to be created now
+        val varNames = 1.to(numObjs).map(i => s"v${typ.name}_$i")
+        val fun = { (body: Expr) =>
+          // TODO assign the objects to each other to make cycles
+          val endExpr =
+            varNames.zip(objs).foldRight(body) { case ((name, value), body) =>
+              LetExpr(Spanned(name, Span.synth), value, body, Span.synth)
+            }
+          prevExprs.foldRight(endExpr)(_(_))
+        }
+        (fun, varNames.toList)
+      }
+    }
+
+    val genFull = for {
+      (firstType, restTypes) <- GenerateTypes.genTypeTree(0)
+      allTypes = firstType :: restTypes
+      (createBody, _) <- genObjs(
+        firstType,
+        allTypes.map(typ => typ.name -> typ).toMap
+      )
+    } yield ParsedFile(
+      allTypes,
+      List(
+        FnDef(
+          Spanned("main", Span.synth),
+          Nil,
+          TypeRef("int", Span.synth),
+          createBody(IntLiteral(0, Span.synth)),
+          Span.synth
+        )
+      )
+    )
+
+    forAll(genFull) { parsedFile =>
+      valgrindCheck(parsedFile, "foo.c", None, snapshot = false)
     }
   }
 }

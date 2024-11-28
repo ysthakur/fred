@@ -79,7 +79,7 @@ case class FnCall(
 
 case class CtorCall(
     ctorName: Spanned[String],
-    values: List[(Spanned[String], Expr)],
+    values: Iterable[(Spanned[String], Expr)],
     span: Span
 ) extends Expr {
   def typ = None
