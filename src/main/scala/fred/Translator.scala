@@ -75,8 +75,7 @@ object Translator {
     }
   }
 
-  /** Generate the signature and implementation for the decrementer function
-    */
+  /** Generate the signature and implementation for the decrementer function */
   private object Decrementer extends GeneratedFn("decr") {
     override def returnType = "void"
 
@@ -247,8 +246,7 @@ object Translator {
     }
   }
 
-  /** Print the object (no newline at end)
-    */
+  /** Print the object (no newline at end) */
   private object Printer extends GeneratedFn("print") {
     override def returnType = "void"
 
@@ -325,8 +323,7 @@ object Translator {
     }
   }
 
-  /** Get the name of this field in C (mangled if necessary)
-    */
+  /** Get the name of this field in C (mangled if necessary) */
   private def cFieldName(fieldName: String, typ: TypeDef, variant: EnumCase) = {
     if (typ.hasCommonField(fieldName)) fieldName
     else mangledFieldName(variant, fieldName)
@@ -352,8 +349,7 @@ object Translator {
 
   private class Helper(typer: Typer) {
 
-    /** Contains a mapping of mangled field names for every type
-      */
+    /** Contains a mapping of mangled field names for every type */
     val mangledFieldsFor = mutable.Map.empty[TypeDef, Map[String, String]]
 
     val mangledVars = mutable.Map.empty[VarDef, String]
@@ -426,8 +422,7 @@ object Translator {
       s"struct { $fields };"
     }
 
-    /** Returns code for the function's declaration and implementation
-      */
+    /** Returns code for the function's declaration and implementation */
     def fnToC(fn: FnDef)(using bindings: Bindings): (String, String) = {
       // param names don't need to be mangled because they're the first occurrence
       val params = fn.params
@@ -499,7 +494,12 @@ object Translator {
           val setup = s"$lhsSetup\n$rhsSetup"
           val teardown = s"$lhsTeardown\n$rhsTeardown"
           if (op.value == BinOp.Seq) {
-            (s"$setup\n$lhsTranslated;", rhsTranslated, teardown)
+            val execLhs = typer.types(lhs) match {
+              case td: TypeDef =>
+                s"drop((void *) $lhsTranslated, (void *) ${Decrementer.name(td)});"
+              case _ => s"$lhsTranslated;"
+            }
+            (s"$setup\n$execLhs", rhsTranslated, teardown)
           } else {
             (setup, s"$lhsTranslated ${op.value.text} $rhsTranslated", teardown)
           }
@@ -514,7 +514,7 @@ object Translator {
           if (shouldMangle) {
             mangledVars.put(
               bindings.vars(name.value),
-              newMangledVar(name.value)
+              mangledName
             )
           }
           val (letSetup, letTeardown) = addBinding(mangledName, valueToC, typ)

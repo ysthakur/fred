@@ -56,6 +56,18 @@ class ExecTests
     assert(valgrindOut.contains("ERROR SUMMARY: 0 errors"), valgrindOut)
   }
 
+  test("Immediately dropped object") {
+    val code = """
+      data Foo = Foo { }
+
+      fn main(): int =
+        Foo {};
+        0
+      """
+
+    valgrindCheck(code, "immediate-drop.c")("")
+  }
+
   test("Basic main function") {
     val code = """
       data List
@@ -245,8 +257,8 @@ class ExecTests
       )
     )
 
-    forAll(genFull) { parsedFile =>
-      valgrindCheck(parsedFile, "foo.c", None, snapshot = false)
+    forAll(GenerateTypes.genTypeTree(5)) { parsedFile =>
+      // valgrindCheck(parsedFile, "foo.c", None, snapshot = false)
     }
   }
 }

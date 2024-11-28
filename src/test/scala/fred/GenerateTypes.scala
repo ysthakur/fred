@@ -14,8 +14,8 @@ object GenerateTypes {
     Gen.sequence[List[T], T](gens)
 
   /** Generate a bunch of types. Each type is its own strongly-connected
-    * component. The returned list is sorted backwards (types that come later in
-    * the list can have references to types that come earlier in the list).
+    * component. Types that come later in the list can have references to types
+    * that come earlier in the list, as well as themselves.
     *
     * Types can have references to themselves (so we can test cycles). To allow
     * this to work without problems, self-references must go through an Option
@@ -24,7 +24,7 @@ object GenerateTypes {
     * All references are mutable, for testing cycles.
     */
   def genTypesAux(): Gen[List[GenTypeAux]] = {
-    Gen.choose(1, 15).flatMap { numSccs =>
+    Gen.sized { numSccs =>
       sequence(0.until(numSccs).map { i =>
         Gen.listOf(Gen.chooseNum(0, i)).map(GenTypeAux(_))
       })
@@ -200,7 +200,7 @@ object GenerateTypes {
       for {
         size <- Gen.size
         numSelfRefs <- Gen.choose(0, maxSelfRefs)
-        numOtherRefs <- Gen.geometric(2.0)
+        numOtherRefs <- Gen.geometric(1.0)
         otherTypes <- Gen.listOfN(numOtherRefs, helper())
       } yield {
         typeNum += 1

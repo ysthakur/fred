@@ -48,6 +48,12 @@ struct FreeCell
 struct PCRBucket *pcrBuckets = NULL;
 struct FreeCell *freeList = NULL;
 
+/** For dropping objects that never get assigned anywhere */
+void drop(Common *obj, void (*decrRC)(void *)) {
+  obj->rc ++;
+  decrRC(obj);
+}
+
 void addPCR(
     Common *obj,
     int scc,
