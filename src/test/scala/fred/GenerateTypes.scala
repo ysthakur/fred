@@ -1,17 +1,87 @@
 package fred
 
-import scala.collection.mutable
 import scala.jdk.CollectionConverters.*
 
 import org.scalacheck.Gen
+import org.scalacheck.Shrink
 
 object GenerateTypes {
-  private val SomeField = "value"
+  val SomeField = "value"
+
+  given noShrink[T]: Shrink[T] = Shrink(_ => Stream.empty)
 
   case class GenTypeAux(refs: List[Int])
 
   def sequence[T](gens: Iterable[Gen[T]]): Gen[List[T]] =
     Gen.sequence[List[T], T](gens)
+
+  /** Generate a bunch of types completely randomly (any type could have
+    * references to any other type). All references are mutable.
+    */
+  def genTypesFullRandom(numTypes: Int): Gen[List[TypeDef]] = {
+    sequence(0.until(numTypes).map { i =>
+      Gen.listOf(Gen.choose(0, numTypes - 1))
+    }).map { types =>
+      val graph = types.zipWithIndex.map { (refs, typeInd) =>
+        s"T$typeInd" -> refs.zipWithIndex
+          .map((ref, i) => (true, s"f$i", s"T$ref"))
+          .toSet
+      }.toMap
+      toTypeDefs(graph)
+    }
+  }
+
+  /** Create an optional type OptT for every given type, and update the given
+    * types so that any reference to a type T in the same SCC gets replaced with
+    * a mutable reference to the optional type OptT
+    * @return
+    *   The optional types and updated types all concatenated into a single list
+    */
+  def addOptTypes(types: List[TypeDef]): List[TypeDef] = {
+    val cycles = Cycles.fromFile(ParsedFile(types, Nil))
+    val safeTypes = cycles.sccs.flatMap { scc =>
+      scc.map { typ =>
+        typ.copy(cases = typ.cases.map { variant =>
+          variant.copy(fields = variant.fields.map { field =>
+            if (scc.exists(_.name == field.typ.name))
+              field.copy(
+                mutable = true,
+                typ = TypeRef(s"Opt${field.typ.name}", Span.synth)
+              )
+            else field.copy(mutable = false, span = Span(-4, -6))
+          })
+        })
+      }
+    }
+
+    val optTypes = types.map { typ =>
+      TypeDef(
+        Spanned(s"Opt${typ.name}", Span.synth),
+        List(
+          EnumCase(
+            Spanned(s"Some${typ.name}", Span.synth),
+            List(
+              FieldDef(
+                false,
+                Spanned(SomeField, Span.synth),
+                TypeRef(typ.name, Span.synth),
+                Span.synth
+              )
+            ),
+            Span.synth
+          ),
+          EnumCase(
+            Spanned(s"None${typ.name}", Span.synth),
+            Nil,
+            Span.synth
+          )
+        ),
+        Span.synth
+      )
+    }
+
+    optTypes ::: safeTypes
+  }
 
   /** Generate a bunch of types. Each type is its own strongly-connected
     * component. Types that come later in the list can have references to types
@@ -169,11 +239,10 @@ object GenerateTypes {
             Spanned("main", Span.synth),
             Nil,
             TypeRef("int", Span.synth),
-            LetExpr(
-              Spanned("ignored", Span.synth),
+            BinExpr(
               expr,
-              IntLiteral(0, Span.synth),
-              Span.synth
+              Spanned(BinOp.Seq, Span.synth),
+              IntLiteral(0, Span.synth)
             ),
             Span.synth
           )

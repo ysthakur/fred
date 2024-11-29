@@ -1,6 +1,5 @@
 package fred
 
-import scala.util.Random
 import scala.collection.mutable
 
 object Translator {
@@ -218,7 +217,6 @@ object Translator {
     override def body(
         typ: TypeDef
     )(using bindings: Bindings, cycles: Cycles): String = {
-      val myScc = cycles.sccMap(typ)
       val rec = indent(1) {
         switch(This, typ) { variant =>
           variant.fields
@@ -413,15 +411,6 @@ object Translator {
       tagEnum + "\n" + struct
     }
 
-    private def enumCaseToC(enumCase: EnumCase) = {
-      val fields = enumCase.fields
-        .map { field =>
-          s"${typeRefToC(field.typ.name)} ${mangledFieldName(enumCase, field.name.value)};"
-        }
-        .mkString(" ")
-      s"struct { $fields };"
-    }
-
     /** Returns code for the function's declaration and implementation */
     def fnToC(fn: FnDef)(using bindings: Bindings): (String, String) = {
       // param names don't need to be mangled because they're the first occurrence
@@ -495,7 +484,7 @@ object Translator {
           val teardown = s"$lhsTeardown\n$rhsTeardown"
           if (op.value == BinOp.Seq) {
             val execLhs = typer.types(lhs) match {
-              case td: TypeDef =>
+              case td: TypeDef if !lhs.isInstanceOf[SetFieldExpr] =>
                 s"drop((void *) $lhsTranslated, (void *) ${Decrementer.name(td)});"
               case _ => s"$lhsTranslated;"
             }
@@ -664,17 +653,6 @@ object Translator {
                       |${incrRc(varName, typ)}""".stripMargin
       val teardown = decrRc(varName, typ)
       (setup, teardown)
-    }
-
-    private def merge(
-        setupsOrTeardowns: Option[String]*
-    ): Option[String] = {
-      setupsOrTeardowns.reduceLeft {
-        case (Some(first), Some(second)) => Some(s"$first\n$second")
-        case (Some(teardown), None)      => Some(teardown)
-        case (None, Some(teardown))      => Some(teardown)
-        case (None, None)                => None
-      }
     }
 
     /** Create a variable name that hopefully won't conflict with any other

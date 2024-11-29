@@ -776,7 +776,7 @@ int main() {
   $decr_ExprList(file->exprs);
   file->exprs = ctorres$7;
   file->exprs->rc ++;
-  drop((void *) actualCtx->files, (void *) $decr_FileList);
+  actualCtx->files;
   struct Context* ctorres$8 = malloc(sizeof (struct Context));
   ctorres$8->rc = 0;
   ctorres$8->color = kBlack;

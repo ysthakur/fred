@@ -5,55 +5,17 @@ import java.nio.file.Paths
 import java.nio.file.Files
 import java.nio.file.Path
 
-import org.scalacheck.Gen
 import org.scalatest.funsuite.AnyFunSuite
-import org.scalatest.tagobjects.Slow
-import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import snapshot4s.scalatest.SnapshotAssertions
 import snapshot4s.generated.snapshotConfig
 
-class ExecTests
-    extends AnyFunSuite,
-      SnapshotAssertions,
-      ScalaCheckPropertyChecks {
+class ExecTests extends AnyFunSuite, SnapshotAssertions {
   def valgrindCheck(code: String, outFile: String)(expected: String): Unit = {
-    valgrindCheck(Parser.parse(code), outFile, Some(expected), snapshot = true)
-  }
-
-  def valgrindCheck(
-      parsedFile: ParsedFile,
-      outFile: String,
-      expected: Option[String],
-      snapshot: Boolean
-  ): Unit = {
-    given typer: Typer = Typer.resolveAllTypes(parsedFile)
-    val generatedC = Translator.toC(parsedFile)
-
-    if (snapshot) {
-      assertFileSnapshot(generatedC, s"exec/$outFile")
-      s"src/test/resources/snapshot/exec/$outFile"
-    }
-
-    Compiler.invokeGCC(generatedC, "a.out")
-
-    val stderrBuf = StringBuilder()
-    val stdout =
-      try {
-        "valgrind --leak-check=full --show-leak-kinds=all -s ./a.out" !! ProcessLogger(
-          _ => {},
-          err => stderrBuf.append('\n').append(err)
-        )
-      } catch {
-        case e: RuntimeException =>
-          throw RuntimeException(stderrBuf.toString, e)
-      }
-    val valgrindOut = stderrBuf.toString
-    expected match {
-      case Some(expected) =>
-        assert(stdout.trim() === expected.trim(), valgrindOut)
-      case None =>
-    }
-    assert(valgrindOut.contains("ERROR SUMMARY: 0 errors"), valgrindOut)
+    ExecTests.valgrindCheck(
+      Parser.parse(code),
+      Some(assertFileSnapshot(_, s"exec/$outFile")),
+      Some(expected)
+    )
   }
 
   test("Immediately dropped object") {
@@ -160,105 +122,49 @@ class ExecTests
 
     valgrindCheck(code, "contrived-needs-sorting.c")("")
   }
+}
 
-  test("Simple generated programs") {
-    given PropertyCheckConfiguration =
-      PropertyCheckConfiguration(minSize = 1, sizeRange = 10)
-    forAll(GenerateTypes.genTypesAux().flatMap(GenerateTypes.genCode)) {
-      parsedFile => valgrindCheck(parsedFile, "foo.c", None, snapshot = false)
-    }
-  }
+object ExecTests {
+  def valgrindCheck(
+      parsedFile: ParsedFile,
+      snapshot: Option[String => Unit],
+      expected: Option[String],
+      print: Boolean = false
+  ): Unit = {
+    given typer: Typer = Typer.resolveAllTypes(parsedFile)
+    val generatedC = Translator.toC(parsedFile)
 
-  test("Generated programs 1", Slow) {
-    given PropertyCheckConfiguration =
-      PropertyCheckConfiguration(minSize = 1, sizeRange = 10)
-
-    /** Generate an expression creating one or more objects of the given type,
-      * each assigned to a variable
-      *
-      * @return
-      *   The first element of the tuple is a function that takes the body to
-      *   create a let expression out of, and the second element is the names of
-      *   the variables created
-      */
-    def genObjs(
-        typ: TypeDef,
-        allTypes: Map[String, TypeDef]
-    ): Gen[(Expr => Expr, List[String])] = {
-      val ctorDef = typ.cases.head
-      val (selfFields, otherFields) =
-        ctorDef.fields.partition(_.name.value.startsWith("self"))
-      for {
-        size <- Gen.size
-        numObjs <- Gen.posNum[Int]
-        (prevExprs, prevVarss) <- GenerateTypes
-          .sequence(otherFields.map { field =>
-            genObjs(allTypes(field.typ.name), allTypes)
-          })
-          .map(_.unzip)
-        objs <- GenerateTypes.sequence(1.to(numObjs).map { i =>
-          val selfFieldArgs = selfFields.zipWithIndex.map { (field, fieldInd) =>
-            Spanned(field.name.value, Span.synth) -> CtorCall(
-              Spanned(s"None${typ.name}", Span.synth),
-              Nil,
-              Span.synth
-            )
-          }
-          GenerateTypes
-            .sequence(otherFields.zipWithIndex.map { (field, fieldInd) =>
-              Gen.oneOf(prevVarss(fieldInd)).map { varName =>
-                Spanned(field.name.value, Span.synth) -> VarRef(
-                  varName,
-                  None,
-                  Span.synth
-                )
-              }
-            })
-            .map { otherFieldArgs =>
-              CtorCall(
-                Spanned(ctorDef.name.value, Span.synth),
-                otherFieldArgs ++ selfFieldArgs,
-                Span.synth
-              )
-            }
-        })
-      } yield {
-        // Variable names for the objects that are going to be created now
-        val varNames = 1.to(numObjs).map(i => s"v${typ.name}_$i")
-        val fun = { (body: Expr) =>
-          // TODO assign the objects to each other to make cycles
-          val endExpr =
-            varNames.zip(objs).foldRight(body) { case ((name, value), body) =>
-              LetExpr(Spanned(name, Span.synth), value, body, Span.synth)
-            }
-          prevExprs.foldRight(endExpr)(_(_))
-        }
-        (fun, varNames.toList)
-      }
+    snapshot match {
+      case Some(assertSnapshot) => assertSnapshot(generatedC)
+      case None                 =>
     }
 
-    val genFull = for {
-      (firstType, restTypes) <- GenerateTypes.genTypeTree(0)
-      allTypes = firstType :: restTypes
-      (createBody, _) <- genObjs(
-        firstType,
-        allTypes.map(typ => typ.name -> typ).toMap
+    if (print) {
+      Files.write(
+        Path.of("/home", "ysthakur", "fred", "foo.c"),
+        generatedC.getBytes()
       )
-    } yield ParsedFile(
-      allTypes,
-      List(
-        FnDef(
-          Spanned("main", Span.synth),
-          Nil,
-          TypeRef("int", Span.synth),
-          createBody(IntLiteral(0, Span.synth)),
-          Span.synth
+    }
+
+    Compiler.invokeGCC(generatedC, "a.out")
+
+    val stderrBuf = StringBuilder()
+    val stdout =
+      try {
+        "valgrind --leak-check=full --show-leak-kinds=all -s ./a.out" !! ProcessLogger(
+          _ => {},
+          err => stderrBuf.append('\n').append(err)
         )
-      )
-    )
-
-    forAll(GenerateTypes.genTypeTree(5)) { parsedFile =>
-      // valgrindCheck(parsedFile, "foo.c", None, snapshot = false)
+      } catch {
+        case e: RuntimeException =>
+          throw RuntimeException(stderrBuf.toString, e)
+      }
+    val valgrindOut = stderrBuf.toString
+    expected match {
+      case Some(expected) =>
+        assert(stdout.trim() == expected.trim(), valgrindOut)
+      case None =>
     }
+    assert(valgrindOut.contains("ERROR SUMMARY: 0 errors"), valgrindOut)
   }
 }

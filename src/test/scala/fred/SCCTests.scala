@@ -5,6 +5,7 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import snapshot4s.scalatest.SnapshotAssertions
 import snapshot4s.generated.snapshotConfig
 import org.scalacheck.Gen
+import org.scalacheck.Shrink
 
 class SCCTests
     extends AnyFunSuite,
@@ -123,20 +124,9 @@ class SCCTests
     // Generate types completely randomly and check if the SCCs make sense.
     // This doesn't check that the algorithm doesn't lump every single type
     // into the same SCC.
-    val gen = for {
-      size <- Gen.size
-      numSccs <-
-        if (size == 0) Gen.fail else Gen.choose(1, math.sqrt(size).toInt)
-      typesAux <- Gen.listOfN(
-        numSccs,
-        Gen.listOf(Gen.choose(0, numSccs - 1)).map(GenerateTypes.GenTypeAux(_))
-      )
-    } yield typesAux
-
-    forAll(gen) { typesAux =>
-      val file = createFileImmutable(typesAux.zipWithIndex.map {
-        (typesAux, i) => s"T$i" -> typesAux.refs.map(ref => s"T$ref").toSet
-      }.toMap)
+    forAll(
+      Gen.sized { GenerateTypes.genTypesFullRandom(_) }.map(ParsedFile(_, Nil))
+    ) { file =>
       val cycles = Cycles.fromFile(file)
       validateSccs(file, cycles)
     }
@@ -144,6 +134,8 @@ class SCCTests
 
   test("SCCs valid for not-so-arbitrary types") {
     // Ensure that the algorithm doesn't lump every type into the same SCC
+
+    given [T]: Shrink[T] = GenerateTypes.noShrink
 
     // Generate a bunch of types. Types that come later in the list can only have
     // references to types that come earlier in the list (or themselves).

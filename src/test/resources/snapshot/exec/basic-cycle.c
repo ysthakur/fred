@@ -283,7 +283,7 @@ int main() {
   $decr_Option(a->next);
   a->next = ctorres$4;
   a->next->rc ++;
-  drop((void *) a->next, (void *) $decr_Option);
+  a->next;
   printf("%d\n", a->value + b->value);
   int ret$5 = 0;
   $decr_List(b);
