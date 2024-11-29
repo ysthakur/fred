@@ -120,7 +120,7 @@ object GenerateTypes {
   def toTypeDefs(
       graph: Map[String, Set[(Boolean, String, String)]]
   ): List[TypeDef] = {
-    graph.map { (name, neighbors) =>
+    graph.map { (name, _) =>
       val spannedName = Spanned(name, Span.synth)
       val fields = graph(name).toList.map {
         (mutable, fieldName, neighborName) =>

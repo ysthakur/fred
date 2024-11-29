@@ -3,7 +3,6 @@ package fred
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import snapshot4s.scalatest.SnapshotAssertions
-import snapshot4s.generated.snapshotConfig
 import org.scalacheck.Gen
 import org.scalacheck.Shrink
 

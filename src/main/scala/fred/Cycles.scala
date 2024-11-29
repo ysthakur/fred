@@ -22,7 +22,7 @@ object Cycles {
 
     given bindings: Bindings = Bindings.fromFile(file)
     val badSCCs = sccs.zipWithIndex
-      .filter { (scc, i) =>
+      .filter { (scc, _) =>
         scc.exists { typ =>
           val fields = typ.cases.flatMap(_.fields)
           fields.exists { field =>
