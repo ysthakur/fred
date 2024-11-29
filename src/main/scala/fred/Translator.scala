@@ -16,18 +16,28 @@ object Translator {
         .flatMap(gen => file.typeDefs.map(td => (gen.decl(td), gen.impl(td))))
         .unzip
     val (fnDecls, fnImpls) = file.fns.map(helper.fnToC).unzip
+    val ctorDecls = file.typeDefs.flatMap(typ =>
+      typ.cases.map(variant => s"${ctorSig(typ, variant)};")
+    )
+    val ctorImpls = file.typeDefs.flatMap { typ =>
+      typ.cases.map { variant =>
+        s"${ctorSig(typ, variant)} {\n${indent(1)(ctorImpl(typ, variant))}\n}"
+      }
+    }
     val generated =
       file.typeDefs.map(helper.translateType).mkString("", "\n", "\n")
         + genDecls.mkString("", "\n", "\n")
+        + ctorDecls.mkString("", "\n", "\n")
         + fnDecls.mkString("", "\n", "\n")
         + genImpls.mkString("", "\n", "\n")
+        + ctorImpls.mkString("", "\n", "\n")
         + fnImpls.mkString("", "\n", "\n")
     "#include \"runtime.h\"\n\n" + generated
       .replaceAll(raw"\n(\s|\n)*\n", "\n")
       .strip() + "\n"
   }
 
-  trait GeneratedFn(unmangledName: String) {
+  private trait GeneratedFn(unmangledName: String) {
     def returnType: String
 
     def body(typ: TypeDef)(using Bindings, Cycles): String
@@ -267,6 +277,39 @@ object Translator {
               |printf("}");""".stripMargin
       }
     }
+  }
+
+  private def ctorName(variant: EnumCase): String =
+    s"new$$${variant.name.value}"
+
+  private def ctorSig(typ: TypeDef, variant: EnumCase): String = {
+    val params = variant.fields.toSeq
+      .sortBy(_.name.value)
+      .map(field => s"${typeRefToC(field.typ.name)} ${field.name.value}")
+      .mkString(", ")
+    s"${typeRefToC(typ.name)} ${ctorName(variant)}($params)"
+  }
+
+  private def ctorImpl(typ: TypeDef, variant: EnumCase)(using
+      bindings: Bindings
+  ): String = {
+    val resVar = "$res"
+    val setFields = variant.fields
+      .map { field =>
+        val fieldAccess =
+          s"$resVar->${cFieldName(field.name.value, typ, variant)}"
+        s"""|$fieldAccess = ${field.name.value};
+            |${incrRc(fieldAccess, bindings.getType(field.typ))}""".stripMargin
+      }
+      .mkString("\n")
+    s"""|${typeRefToC(typ.name)} $resVar = malloc(sizeof (struct ${typ.name}));
+        |$resVar->rc = 0;
+        |$resVar->color = kBlack;
+        |$resVar->addedPCR = 0;
+        |$resVar->print = ${Printer.name(typ)};
+        |$resVar->kind = ${tagName(variant.name.value)};
+        |$setFields
+        |return $resVar;""".stripMargin
   }
 
   private def switch(expr: String, typ: TypeDef)(
@@ -544,36 +587,17 @@ object Translator {
             s"${mangleFnName(fnName.value)}(${argsToC.mkString(", ")})",
             teardowns.mkString("\n")
           )
-        case CtorCall(ctorName, values, span) =>
-          val (typ, variant) = bindings.ctors(ctorName.value)
-          val resVar = newVar("ctorres")
-          val valueSetups = values
-            .map { case (fieldName, value) =>
-              val fieldType = bindings.types(
-                variant.fields
-                  .find(_.name.value == fieldName.value)
-                  .get
-                  .typ
-                  .name
-              )
-              val (valueSetup, valueToC, valueTeardown) = exprToC(value)
-              val fieldAccess =
-                s"$resVar->${cFieldName(fieldName.value, typ, variant)}"
-              s"""|$valueSetup
-                  |$fieldAccess = $valueToC;
-                  |${incrRc(fieldAccess, fieldType)}
-                  |$valueTeardown""".stripMargin
-            }
-            .mkString("\n")
-          val setup =
-            s"""|${typeRefToC(typ.name)} $resVar = malloc(sizeof (struct ${typ.name}));
-                |$resVar->rc = 0;
-                |$resVar->color = kBlack;
-                |$resVar->addedPCR = 0;
-                |$resVar->print = ${Printer.name(typ)};
-                |$resVar->kind = ${tagName(ctorName.value)};
-                |$valueSetups""".stripMargin
-          (setup, resVar, "")
+        case CtorCall(ctorNameSpanned, values, span) =>
+          val (typ, variant) = bindings.ctors(ctorNameSpanned.value)
+          val (setups, args, teardowns) = values.toSeq
+            .sortBy((fieldName, _) => fieldName.value)
+            .map((_, value) => exprToC(value))
+            .unzip3
+          (
+            setups.mkString("\n"),
+            s"${ctorName(variant)}(${args.mkString(", ")})",
+            teardowns.mkString("\n")
+          )
         case matchExpr @ MatchExpr(obj, arms, _) =>
           val (objSetup, objToC, objTeardown) = exprToC(obj)
           val objType = typer.types(obj).asInstanceOf[TypeDef]

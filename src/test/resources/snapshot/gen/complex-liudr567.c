@@ -19,6 +19,8 @@ void $scan_Foo(struct Foo* this);
 void $scanBlack_Foo(struct Foo* this);
 void $collectWhite_Foo(struct Foo* this);
 void $print_Foo(struct Foo* this);
+struct Foo* new$Bar(int x, int y);
+struct Foo* new$Baz(char* a, int b);
 int fn$foo(struct Foo* foo);
 int main();
 void $free_Foo(struct Foo* this) {
@@ -120,6 +122,28 @@ void $print_Foo(struct Foo* this) {
     break;
   }
 }
+struct Foo* new$Bar(int x, int y) {
+  struct Foo* $res = malloc(sizeof (struct Foo));
+  $res->rc = 0;
+  $res->color = kBlack;
+  $res->addedPCR = 0;
+  $res->print = $print_Foo;
+  $res->kind = Bar_tag;
+  $res->x_Bar = x;
+  $res->y_Bar = y;
+  return $res;
+}
+struct Foo* new$Baz(char* a, int b) {
+  struct Foo* $res = malloc(sizeof (struct Foo));
+  $res->rc = 0;
+  $res->color = kBlack;
+  $res->addedPCR = 0;
+  $res->print = $print_Foo;
+  $res->kind = Baz_tag;
+  $res->a_Baz = a;
+  $res->b_Baz = b;
+  return $res;
+}
 int fn$foo(struct Foo* foo) {
   foo->rc ++;
   struct Foo* matchobj$0 = foo;
@@ -141,18 +165,10 @@ int fn$foo(struct Foo* foo) {
   return ret$2;
 }
 int main() {
-  struct Foo* ctorres$3 = malloc(sizeof (struct Foo));
-  ctorres$3->rc = 0;
-  ctorres$3->color = kBlack;
-  ctorres$3->addedPCR = 0;
-  ctorres$3->print = $print_Foo;
-  ctorres$3->kind = Bar_tag;
-  ctorres$3->x_Bar = 1;
-  ctorres$3->y_Bar = 2;
-  struct Foo* foo = ctorres$3;
+  struct Foo* foo = new$Bar(1, 2);
   foo->rc ++;
-  int ret$4 = fn$foo(foo);
+  int ret$3 = fn$foo(foo);
   $decr_Foo(foo);
   processAllPCRs();
-  return ret$4;
+  return ret$3;
 }

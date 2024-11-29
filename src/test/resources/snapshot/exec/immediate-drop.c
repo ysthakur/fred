@@ -18,6 +18,7 @@ void $scan_Foo(struct Foo* this);
 void $scanBlack_Foo(struct Foo* this);
 void $collectWhite_Foo(struct Foo* this);
 void $print_Foo(struct Foo* this);
+struct Foo* new$Foo();
 int main();
 void $free_Foo(struct Foo* this) {
   fprintf(stderr, "Freeing Foo\n");
@@ -90,15 +91,18 @@ void $print_Foo(struct Foo* this) {
     break;
   }
 }
+struct Foo* new$Foo() {
+  struct Foo* $res = malloc(sizeof (struct Foo));
+  $res->rc = 0;
+  $res->color = kBlack;
+  $res->addedPCR = 0;
+  $res->print = $print_Foo;
+  $res->kind = Foo_tag;
+  return $res;
+}
 int main() {
-  struct Foo* ctorres$0 = malloc(sizeof (struct Foo));
-  ctorres$0->rc = 0;
-  ctorres$0->color = kBlack;
-  ctorres$0->addedPCR = 0;
-  ctorres$0->print = $print_Foo;
-  ctorres$0->kind = Foo_tag;
-  drop((void *) ctorres$0, (void *) $decr_Foo);
-  int ret$1 = 0;
+  drop((void *) new$Foo(), (void *) $decr_Foo);
+  int ret$0 = 0;
   processAllPCRs();
-  return ret$1;
+  return ret$0;
 }

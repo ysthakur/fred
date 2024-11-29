@@ -19,6 +19,8 @@ void $scan_List(struct List* this);
 void $scanBlack_List(struct List* this);
 void $collectWhite_List(struct List* this);
 void $print_List(struct List* this);
+struct List* new$Nil();
+struct List* new$Cons(struct List* next, int value);
 int fn$sum(struct List* list);
 int main();
 void $free_List(struct List* this) {
@@ -121,6 +123,27 @@ void $print_List(struct List* this) {
     break;
   }
 }
+struct List* new$Nil() {
+  struct List* $res = malloc(sizeof (struct List));
+  $res->rc = 0;
+  $res->color = kBlack;
+  $res->addedPCR = 0;
+  $res->print = $print_List;
+  $res->kind = Nil_tag;
+  return $res;
+}
+struct List* new$Cons(struct List* next, int value) {
+  struct List* $res = malloc(sizeof (struct List));
+  $res->rc = 0;
+  $res->color = kBlack;
+  $res->addedPCR = 0;
+  $res->print = $print_List;
+  $res->kind = Cons_tag;
+  $res->value_Cons = value;
+  $res->next_Cons = next;
+  $res->next_Cons->rc ++;
+  return $res;
+}
 int fn$sum(struct List* list) {
   list->rc ++;
   struct List* matchobj$0 = list;
@@ -142,44 +165,11 @@ int fn$sum(struct List* list) {
   return ret$2;
 }
 int main() {
-  struct List* ctorres$3 = malloc(sizeof (struct List));
-  ctorres$3->rc = 0;
-  ctorres$3->color = kBlack;
-  ctorres$3->addedPCR = 0;
-  ctorres$3->print = $print_List;
-  ctorres$3->kind = Cons_tag;
-  ctorres$3->value_Cons = 1;
-  struct List* ctorres$4 = malloc(sizeof (struct List));
-  ctorres$4->rc = 0;
-  ctorres$4->color = kBlack;
-  ctorres$4->addedPCR = 0;
-  ctorres$4->print = $print_List;
-  ctorres$4->kind = Cons_tag;
-  ctorres$4->value_Cons = 2;
-  struct List* ctorres$5 = malloc(sizeof (struct List));
-  ctorres$5->rc = 0;
-  ctorres$5->color = kBlack;
-  ctorres$5->addedPCR = 0;
-  ctorres$5->print = $print_List;
-  ctorres$5->kind = Cons_tag;
-  ctorres$5->value_Cons = 4;
-  struct List* ctorres$6 = malloc(sizeof (struct List));
-  ctorres$6->rc = 0;
-  ctorres$6->color = kBlack;
-  ctorres$6->addedPCR = 0;
-  ctorres$6->print = $print_List;
-  ctorres$6->kind = Nil_tag;
-  ctorres$5->next_Cons = ctorres$6;
-  ctorres$5->next_Cons->rc ++;
-  ctorres$4->next_Cons = ctorres$5;
-  ctorres$4->next_Cons->rc ++;
-  ctorres$3->next_Cons = ctorres$4;
-  ctorres$3->next_Cons->rc ++;
-  struct List* list = ctorres$3;
+  struct List* list = new$Cons(new$Cons(new$Cons(new$Nil(), 4), 2), 1);
   list->rc ++;
   printf("%d\n", fn$sum(list));
-  int ret$7 = 0;
+  int ret$3 = 0;
   $decr_List(list);
   processAllPCRs();
-  return ret$7;
+  return ret$3;
 }

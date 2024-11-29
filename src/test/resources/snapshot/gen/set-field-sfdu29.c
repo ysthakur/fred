@@ -19,6 +19,7 @@ void $scan_Foo(struct Foo* this);
 void $scanBlack_Foo(struct Foo* this);
 void $collectWhite_Foo(struct Foo* this);
 void $print_Foo(struct Foo* this);
+struct Foo* new$Foo(int field);
 int fn$bar(struct Foo* f);
 void $free_Foo(struct Foo* this) {
   fprintf(stderr, "Freeing Foo\n");
@@ -93,6 +94,16 @@ void $print_Foo(struct Foo* this) {
     printf("}");
     break;
   }
+}
+struct Foo* new$Foo(int field) {
+  struct Foo* $res = malloc(sizeof (struct Foo));
+  $res->rc = 0;
+  $res->color = kBlack;
+  $res->addedPCR = 0;
+  $res->print = $print_Foo;
+  $res->kind = Foo_tag;
+  $res->field = field;
+  return $res;
 }
 int fn$bar(struct Foo* f) {
   f->rc ++;

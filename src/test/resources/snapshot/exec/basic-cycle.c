@@ -39,6 +39,9 @@ void $collectWhite_Option(struct Option* this);
 void $collectWhite_List(struct List* this);
 void $print_Option(struct Option* this);
 void $print_List(struct List* this);
+struct Option* new$None();
+struct Option* new$Some(struct List* value);
+struct List* new$List(struct Option* next, int value);
 int main();
 void $free_Option(struct Option* this) {
   fprintf(stderr, "Freeing Option\n");
@@ -235,59 +238,51 @@ void $print_List(struct List* this) {
     break;
   }
 }
+struct Option* new$None() {
+  struct Option* $res = malloc(sizeof (struct Option));
+  $res->rc = 0;
+  $res->color = kBlack;
+  $res->addedPCR = 0;
+  $res->print = $print_Option;
+  $res->kind = None_tag;
+  return $res;
+}
+struct Option* new$Some(struct List* value) {
+  struct Option* $res = malloc(sizeof (struct Option));
+  $res->rc = 0;
+  $res->color = kBlack;
+  $res->addedPCR = 0;
+  $res->print = $print_Option;
+  $res->kind = Some_tag;
+  $res->value_Some = value;
+  $res->value_Some->rc ++;
+  return $res;
+}
+struct List* new$List(struct Option* next, int value) {
+  struct List* $res = malloc(sizeof (struct List));
+  $res->rc = 0;
+  $res->color = kBlack;
+  $res->addedPCR = 0;
+  $res->print = $print_List;
+  $res->kind = List_tag;
+  $res->value = value;
+  $res->next = next;
+  $res->next->rc ++;
+  return $res;
+}
 int main() {
-  struct List* ctorres$0 = malloc(sizeof (struct List));
-  ctorres$0->rc = 0;
-  ctorres$0->color = kBlack;
-  ctorres$0->addedPCR = 0;
-  ctorres$0->print = $print_List;
-  ctorres$0->kind = List_tag;
-  ctorres$0->value = 1;
-  struct Option* ctorres$1 = malloc(sizeof (struct Option));
-  ctorres$1->rc = 0;
-  ctorres$1->color = kBlack;
-  ctorres$1->addedPCR = 0;
-  ctorres$1->print = $print_Option;
-  ctorres$1->kind = None_tag;
-  ctorres$0->next = ctorres$1;
-  ctorres$0->next->rc ++;
-  struct List* a = ctorres$0;
+  struct List* a = new$List(new$None(), 1);
   a->rc ++;
-  struct List* ctorres$2 = malloc(sizeof (struct List));
-  ctorres$2->rc = 0;
-  ctorres$2->color = kBlack;
-  ctorres$2->addedPCR = 0;
-  ctorres$2->print = $print_List;
-  ctorres$2->kind = List_tag;
-  ctorres$2->value = 2;
-  struct Option* ctorres$3 = malloc(sizeof (struct Option));
-  ctorres$3->rc = 0;
-  ctorres$3->color = kBlack;
-  ctorres$3->addedPCR = 0;
-  ctorres$3->print = $print_Option;
-  ctorres$3->kind = Some_tag;
-  ctorres$3->value_Some = a;
-  ctorres$3->value_Some->rc ++;
-  ctorres$2->next = ctorres$3;
-  ctorres$2->next->rc ++;
-  struct List* b = ctorres$2;
+  struct List* b = new$List(new$Some(a), 2);
   b->rc ++;
-  struct Option* ctorres$4 = malloc(sizeof (struct Option));
-  ctorres$4->rc = 0;
-  ctorres$4->color = kBlack;
-  ctorres$4->addedPCR = 0;
-  ctorres$4->print = $print_Option;
-  ctorres$4->kind = Some_tag;
-  ctorres$4->value_Some = b;
-  ctorres$4->value_Some->rc ++;
   $decr_Option(a->next);
-  a->next = ctorres$4;
+  a->next = new$Some(b);
   a->next->rc ++;
   a->next;
   printf("%d\n", a->value + b->value);
-  int ret$5 = 0;
+  int ret$0 = 0;
   $decr_List(b);
   $decr_List(a);
   processAllPCRs();
-  return ret$5;
+  return ret$0;
 }

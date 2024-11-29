@@ -19,6 +19,7 @@ void $scan_Rec(struct Rec* this);
 void $scanBlack_Rec(struct Rec* this);
 void $collectWhite_Rec(struct Rec* this);
 void $print_Rec(struct Rec* this);
+struct Rec* new$Rec(struct Rec* rec);
 void $free_Rec(struct Rec* this) {
   fprintf(stderr, "Freeing Rec\n");
   switch (this->kind) {
@@ -99,4 +100,15 @@ void $print_Rec(struct Rec* this) {
     printf("}");
     break;
   }
+}
+struct Rec* new$Rec(struct Rec* rec) {
+  struct Rec* $res = malloc(sizeof (struct Rec));
+  $res->rc = 0;
+  $res->color = kBlack;
+  $res->addedPCR = 0;
+  $res->print = $print_Rec;
+  $res->kind = Rec_tag;
+  $res->rec = rec;
+  $res->rec->rc ++;
+  return $res;
 }

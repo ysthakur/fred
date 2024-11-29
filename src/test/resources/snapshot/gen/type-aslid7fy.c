@@ -20,6 +20,8 @@ void $scan_Foo(struct Foo* this);
 void $scanBlack_Foo(struct Foo* this);
 void $collectWhite_Foo(struct Foo* this);
 void $print_Foo(struct Foo* this);
+struct Foo* new$Bar(char* common, struct Foo* foo, char* notcommon);
+struct Foo* new$Baz(char* blech, char* common, int gah, int notcommon);
 char* fn$foo(struct Foo* param);
 void $free_Foo(struct Foo* this) {
   fprintf(stderr, "Freeing Foo\n");
@@ -142,6 +144,32 @@ void $print_Foo(struct Foo* this) {
     printf("}");
     break;
   }
+}
+struct Foo* new$Bar(char* common, struct Foo* foo, char* notcommon) {
+  struct Foo* $res = malloc(sizeof (struct Foo));
+  $res->rc = 0;
+  $res->color = kBlack;
+  $res->addedPCR = 0;
+  $res->print = $print_Foo;
+  $res->kind = Bar_tag;
+  $res->foo_Bar = foo;
+  $res->foo_Bar->rc ++;
+  $res->common = common;
+  $res->notcommon_Bar = notcommon;
+  return $res;
+}
+struct Foo* new$Baz(char* blech, char* common, int gah, int notcommon) {
+  struct Foo* $res = malloc(sizeof (struct Foo));
+  $res->rc = 0;
+  $res->color = kBlack;
+  $res->addedPCR = 0;
+  $res->print = $print_Foo;
+  $res->kind = Baz_tag;
+  $res->blech_Baz = blech;
+  $res->gah_Baz = gah;
+  $res->common = common;
+  $res->notcommon_Baz = notcommon;
+  return $res;
 }
 char* fn$foo(struct Foo* param) {
   param->rc ++;

@@ -115,6 +115,14 @@ void $print_FileList(struct FileList* this);
 void $print_File(struct File* this);
 void $print_ExprList(struct ExprList* this);
 void $print_Expr(struct Expr* this);
+struct CtxRef* new$CtxRef(struct Context* ref);
+struct Context* new$Context(struct FileList* files, char* name);
+struct FileList* new$FileNil();
+struct FileList* new$FileCons(struct Context* ctx, struct File* head, struct FileList* tail);
+struct File* new$File(struct ExprList* exprs);
+struct ExprList* new$ExprNil();
+struct ExprList* new$ExprCons(struct Expr* head, struct ExprList* tail);
+struct Expr* new$Expr(struct File* file);
 int main();
 void $free_CtxRef(struct CtxRef* this) {
   fprintf(stderr, "Freeing CtxRef\n");
@@ -694,114 +702,122 @@ void $print_Expr(struct Expr* this) {
     break;
   }
 }
+struct CtxRef* new$CtxRef(struct Context* ref) {
+  struct CtxRef* $res = malloc(sizeof (struct CtxRef));
+  $res->rc = 0;
+  $res->color = kBlack;
+  $res->addedPCR = 0;
+  $res->print = $print_CtxRef;
+  $res->kind = CtxRef_tag;
+  $res->ref = ref;
+  $res->ref->rc ++;
+  return $res;
+}
+struct Context* new$Context(struct FileList* files, char* name) {
+  struct Context* $res = malloc(sizeof (struct Context));
+  $res->rc = 0;
+  $res->color = kBlack;
+  $res->addedPCR = 0;
+  $res->print = $print_Context;
+  $res->kind = Context_tag;
+  $res->name = name;
+  $res->files = files;
+  $res->files->rc ++;
+  return $res;
+}
+struct FileList* new$FileNil() {
+  struct FileList* $res = malloc(sizeof (struct FileList));
+  $res->rc = 0;
+  $res->color = kBlack;
+  $res->addedPCR = 0;
+  $res->print = $print_FileList;
+  $res->kind = FileNil_tag;
+  return $res;
+}
+struct FileList* new$FileCons(struct Context* ctx, struct File* head, struct FileList* tail) {
+  struct FileList* $res = malloc(sizeof (struct FileList));
+  $res->rc = 0;
+  $res->color = kBlack;
+  $res->addedPCR = 0;
+  $res->print = $print_FileList;
+  $res->kind = FileCons_tag;
+  $res->ctx_FileCons = ctx;
+  $res->ctx_FileCons->rc ++;
+  $res->head_FileCons = head;
+  $res->head_FileCons->rc ++;
+  $res->tail_FileCons = tail;
+  $res->tail_FileCons->rc ++;
+  return $res;
+}
+struct File* new$File(struct ExprList* exprs) {
+  struct File* $res = malloc(sizeof (struct File));
+  $res->rc = 0;
+  $res->color = kBlack;
+  $res->addedPCR = 0;
+  $res->print = $print_File;
+  $res->kind = File_tag;
+  $res->exprs = exprs;
+  $res->exprs->rc ++;
+  return $res;
+}
+struct ExprList* new$ExprNil() {
+  struct ExprList* $res = malloc(sizeof (struct ExprList));
+  $res->rc = 0;
+  $res->color = kBlack;
+  $res->addedPCR = 0;
+  $res->print = $print_ExprList;
+  $res->kind = ExprNil_tag;
+  return $res;
+}
+struct ExprList* new$ExprCons(struct Expr* head, struct ExprList* tail) {
+  struct ExprList* $res = malloc(sizeof (struct ExprList));
+  $res->rc = 0;
+  $res->color = kBlack;
+  $res->addedPCR = 0;
+  $res->print = $print_ExprList;
+  $res->kind = ExprCons_tag;
+  $res->head_ExprCons = head;
+  $res->head_ExprCons->rc ++;
+  $res->tail_ExprCons = tail;
+  $res->tail_ExprCons->rc ++;
+  return $res;
+}
+struct Expr* new$Expr(struct File* file) {
+  struct Expr* $res = malloc(sizeof (struct Expr));
+  $res->rc = 0;
+  $res->color = kBlack;
+  $res->addedPCR = 0;
+  $res->print = $print_Expr;
+  $res->kind = Expr_tag;
+  $res->file = file;
+  $res->file->rc ++;
+  return $res;
+}
 int main() {
-  struct CtxRef* ctorres$0 = malloc(sizeof (struct CtxRef));
-  ctorres$0->rc = 0;
-  ctorres$0->color = kBlack;
-  ctorres$0->addedPCR = 0;
-  ctorres$0->print = $print_CtxRef;
-  ctorres$0->kind = CtxRef_tag;
-  struct Context* ctorres$1 = malloc(sizeof (struct Context));
-  ctorres$1->rc = 0;
-  ctorres$1->color = kBlack;
-  ctorres$1->addedPCR = 0;
-  ctorres$1->print = $print_Context;
-  ctorres$1->kind = Context_tag;
-  ctorres$1->name = "foo";
-  struct FileList* ctorres$2 = malloc(sizeof (struct FileList));
-  ctorres$2->rc = 0;
-  ctorres$2->color = kBlack;
-  ctorres$2->addedPCR = 0;
-  ctorres$2->print = $print_FileList;
-  ctorres$2->kind = FileNil_tag;
-  ctorres$1->files = ctorres$2;
-  ctorres$1->files->rc ++;
-  ctorres$0->ref = ctorres$1;
-  ctorres$0->ref->rc ++;
-  struct CtxRef* ctx = ctorres$0;
+  struct CtxRef* ctx = new$CtxRef(new$Context(new$FileNil(), "foo"));
   ctx->rc ++;
-  struct File* ctorres$3 = malloc(sizeof (struct File));
-  ctorres$3->rc = 0;
-  ctorres$3->color = kBlack;
-  ctorres$3->addedPCR = 0;
-  ctorres$3->print = $print_File;
-  ctorres$3->kind = File_tag;
-  struct ExprList* ctorres$4 = malloc(sizeof (struct ExprList));
-  ctorres$4->rc = 0;
-  ctorres$4->color = kBlack;
-  ctorres$4->addedPCR = 0;
-  ctorres$4->print = $print_ExprList;
-  ctorres$4->kind = ExprNil_tag;
-  ctorres$3->exprs = ctorres$4;
-  ctorres$3->exprs->rc ++;
-  struct File* file = ctorres$3;
+  struct File* file = new$File(new$ExprNil());
   file->rc ++;
   struct Context* actualCtx = ctx->ref;
   actualCtx->rc ++;
-  struct FileList* ctorres$5 = malloc(sizeof (struct FileList));
-  ctorres$5->rc = 0;
-  ctorres$5->color = kBlack;
-  ctorres$5->addedPCR = 0;
-  ctorres$5->print = $print_FileList;
-  ctorres$5->kind = FileCons_tag;
-  ctorres$5->ctx_FileCons = ctx->ref;
-  ctorres$5->ctx_FileCons->rc ++;
-  ctorres$5->head_FileCons = file;
-  ctorres$5->head_FileCons->rc ++;
-  ctorres$5->tail_FileCons = ctx->ref->files;
-  ctorres$5->tail_FileCons->rc ++;
   $decr_FileList(actualCtx->files);
-  actualCtx->files = ctorres$5;
+  actualCtx->files = new$FileCons(ctx->ref, file, ctx->ref->files);
   actualCtx->files->rc ++;
-  struct Expr* ctorres$6 = malloc(sizeof (struct Expr));
-  ctorres$6->rc = 0;
-  ctorres$6->color = kBlack;
-  ctorres$6->addedPCR = 0;
-  ctorres$6->print = $print_Expr;
-  ctorres$6->kind = Expr_tag;
-  ctorres$6->file = file;
-  ctorres$6->file->rc ++;
-  struct Expr* expr = ctorres$6;
+  struct Expr* expr = new$Expr(file);
   expr->rc ++;
-  struct ExprList* ctorres$7 = malloc(sizeof (struct ExprList));
-  ctorres$7->rc = 0;
-  ctorres$7->color = kBlack;
-  ctorres$7->addedPCR = 0;
-  ctorres$7->print = $print_ExprList;
-  ctorres$7->kind = ExprCons_tag;
-  ctorres$7->head_ExprCons = expr;
-  ctorres$7->head_ExprCons->rc ++;
-  ctorres$7->tail_ExprCons = file->exprs;
-  ctorres$7->tail_ExprCons->rc ++;
   $decr_ExprList(file->exprs);
-  file->exprs = ctorres$7;
+  file->exprs = new$ExprCons(expr, file->exprs);
   file->exprs->rc ++;
   actualCtx->files;
-  struct Context* ctorres$8 = malloc(sizeof (struct Context));
-  ctorres$8->rc = 0;
-  ctorres$8->color = kBlack;
-  ctorres$8->addedPCR = 0;
-  ctorres$8->print = $print_Context;
-  ctorres$8->kind = Context_tag;
-  ctorres$8->name = "other context";
-  struct FileList* ctorres$9 = malloc(sizeof (struct FileList));
-  ctorres$9->rc = 0;
-  ctorres$9->color = kBlack;
-  ctorres$9->addedPCR = 0;
-  ctorres$9->print = $print_FileList;
-  ctorres$9->kind = FileNil_tag;
-  ctorres$8->files = ctorres$9;
-  ctorres$8->files->rc ++;
   $decr_Context(ctx->ref);
-  ctx->ref = ctorres$8;
+  ctx->ref = new$Context(new$FileNil(), "other context");
   ctx->ref->rc ++;
   drop((void *) file->exprs, (void *) $decr_ExprList);
   drop((void *) ctx->ref, (void *) $decr_Context);
-  int ret$10 = 0;
+  int ret$0 = 0;
   $decr_Expr(expr);
   $decr_Context(actualCtx);
   $decr_File(file);
   $decr_CtxRef(ctx);
-  processAllPCRs();
-  return ret$10;
+  return ret$0;
 }
