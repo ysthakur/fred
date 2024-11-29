@@ -139,10 +139,7 @@ object ExecTests {
     }
 
     if (print) {
-      Files.write(
-        Path.of("/home", "ysthakur", "fred", "foo.c"),
-        generatedC.getBytes()
-      )
+      Files.write(Path.of("foo.c"), generatedC.getBytes())
     }
 
     Compiler.invokeGCC(generatedC, "a.out")

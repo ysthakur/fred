@@ -24,8 +24,6 @@ class FuzzTests
     given PropertyCheckConfiguration =
       PropertyCheckConfiguration(minSize = 1, sizeRange = 30)
 
-    given [T]: Shrink[T] = Shrink(_ => Stream.empty)
-
     def genVars(
         typ: TypeDef,
         prevTypes: Map[String, Map[String, Expr]]
@@ -128,7 +126,7 @@ class FuzzTests
       assignExprs <- GenerateTypes
         .sequence(
           allTypes.filterNot(_.name.startsWith("Opt")).map { typ =>
-            createCycles(typ, allVars.mapValues(_.keySet).toMap)
+            createCycles(typ, allVars.view.mapValues(_.keySet).toMap)
           }
         )
         .map(_.flatten)

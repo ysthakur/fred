@@ -15,7 +15,7 @@ class SCCTests
   def createFile(graph: Map[String, Set[(Boolean, String)]]): ParsedFile = {
     ParsedFile(
       GenerateTypes.toTypeDefs(
-        graph
+        graph.view
           .mapValues(_.map((mut, typeName) => (mut, s"f$typeName", typeName)))
           .toMap
       ),
@@ -24,7 +24,7 @@ class SCCTests
   }
 
   def createFileImmutable(graph: Map[String, Set[String]]): ParsedFile = {
-    createFile(graph.mapValues(_.map(false -> _)).toMap)
+    createFile(graph.view.mapValues(_.map(false -> _)).toMap)
   }
 
   def simplifySCCs(sccs: List[Set[TypeDef]]): List[Set[String]] = {
@@ -133,8 +133,6 @@ class SCCTests
 
   test("SCCs valid for not-so-arbitrary types") {
     // Ensure that the algorithm doesn't lump every type into the same SCC
-
-    given [T]: Shrink[T] = GenerateTypes.noShrink
 
     // Generate a bunch of types. Types that come later in the list can only have
     // references to types that come earlier in the list (or themselves).

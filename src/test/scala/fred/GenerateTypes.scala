@@ -3,12 +3,9 @@ package fred
 import scala.jdk.CollectionConverters.*
 
 import org.scalacheck.Gen
-import org.scalacheck.Shrink
 
 object GenerateTypes {
   val SomeField = "value"
-
-  given noShrink[T]: Shrink[T] = Shrink(_ => Stream.empty)
 
   case class GenTypeAux(refs: List[Int])
 

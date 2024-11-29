@@ -13,7 +13,7 @@ lazy val root = project
 
     scalaVersion := scala3Version,
 
-    scalacOptions ++= Seq("-Wunused:all"),
+    scalacOptions ++= Seq("-Wunused:all", "-deprecation"),
 
     libraryDependencies ++= Seq(
       "org.typelevel" %% "cats-parse" % "0.3.9",
