@@ -2,17 +2,14 @@ package fred
 
 import scala.collection.mutable
 
-/** @param sccs
-  *   A list of SCCs, sorted topologically
-  * @param sccMap
-  *   Map each type to the index of the SCC it occurs in
-  * @param badSCCs
-  *   SCCs where there is at least one mutable reference within that SCC to
-  *   another type within the same SCC
-  */
 case class Cycles(
+    /** A list of SCCs, sorted topologically */
     sccs: List[Set[TypeDef]],
+    /** Map each type to the index of the SCC it occurs in */
     sccMap: Map[TypeDef, Int],
+    /** SCCs where there is at least one mutable reference within that SCC to
+      * another type within the same SCC
+      */
     badSCCs: Set[Int]
 )
 
@@ -25,7 +22,7 @@ object Cycles {
 
     given bindings: Bindings = Bindings.fromFile(file)
     val badSCCs = sccs.zipWithIndex
-      .filter { (scc, i) =>
+      .filter { (scc, _) =>
         scc.exists { typ =>
           val fields = typ.cases.flatMap(_.fields)
           fields.exists { field =>

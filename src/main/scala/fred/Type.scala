@@ -17,7 +17,7 @@ enum BuiltinType extends Type {
     }
   }
 
-  override def span = Span.synthetic
+  override def span = Span.synth
 }
 
 case class TypeDef(
@@ -36,7 +36,7 @@ case class TypeDef(
   }
 }
 
-case class EnumCase(name: Spanned[String], fields: List[FieldDef], span: Span)
+case class EnumCase(name: Spanned[String], fields: Iterable[FieldDef], span: Span)
 
 case class FieldDef(
     mutable: Boolean,

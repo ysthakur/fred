@@ -25,6 +25,7 @@ local.sbt
 .bloop/
 .metals/
 metals.sbt
+sbt-launch.jar
 
 # IDEA
 .idea

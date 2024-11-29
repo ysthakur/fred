@@ -86,8 +86,7 @@ object Bindings {
 
 object Typer {
 
-  /** Step through all expressions in the file and find their types
-    */
+  /** Step through all expressions in the file and find their types */
   def resolveAllTypes(file: ParsedFile): Typer = {
     given ParsedFile = file
     val types = mutable.Map.empty[Expr, Type]
@@ -214,8 +213,14 @@ object Typer {
               )
             }
         }
-      case CtorCall(ctorName, values, span) =>
-        val (typ, variant) = bindings.ctors(ctorName.value)
+      case CtorCall(Spanned(ctorName, ctorNameSpan), values, span) =>
+        if (!bindings.ctors.contains(ctorName)) {
+          throw new CompileError(
+            s"No such constructor: $ctorName",
+            ctorNameSpan
+          )
+        }
+        val (typ, variant) = bindings.ctors(ctorName)
         for ((fieldName, value) <- values) {
           val field = variant.fields.find(_.name.value == fieldName.value).get
           val gotType = resolveExprType(value, bindings, types)

@@ -795,8 +795,8 @@ int main() {
   $decr_Context(ctx->ref);
   ctx->ref = ctorres$8;
   ctx->ref->rc ++;
-  file->exprs;
-  ctx->ref;
+  drop((void *) file->exprs, (void *) $decr_ExprList);
+  drop((void *) ctx->ref, (void *) $decr_Context);
   int ret$10 = 0;
   $decr_Expr(expr);
   $decr_Context(actualCtx);

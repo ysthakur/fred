@@ -1,36 +1,32 @@
 package fred
 
+import scala.sys.process.*
+import java.nio.file.Files
+import java.nio.file.Path
+
 import org.scalatest.funsuite.AnyFunSuite
 import snapshot4s.scalatest.SnapshotAssertions
 import snapshot4s.generated.snapshotConfig
 
-import scala.sys.process.*
-import java.nio.file.Paths
+class ExecTests extends AnyFunSuite, SnapshotAssertions {
+  def valgrindCheck(code: String, outFile: String)(expected: String): Unit = {
+    ExecTests.valgrindCheck(
+      Parser.parse(code),
+      Some(assertFileSnapshot(_, s"exec/$outFile")),
+      Some(expected)
+    )
+  }
 
-class ExecTests extends AnyFunSuite with SnapshotAssertions {
-  def valgrindCheck(code: String, outFile: String)(expected: String) = {
-    val parsedFile = Parser.parse(code)
-    given typer: Typer = Typer.resolveAllTypes(parsedFile)
-    val generatedC = Translator.toC(parsedFile)
+  test("Immediately dropped object") {
+    val code = """
+      data Foo = Foo { }
 
-    assertFileSnapshot(generatedC, s"exec/$outFile")
+      fn main(): int =
+        Foo {};
+        0
+      """
 
-    s"gcc -g -I ${Compiler.includesFolder()} src/test/resources/snapshot/exec/$outFile".!!
-
-    val stderrBuf = StringBuilder()
-    val stdout =
-      try {
-        "valgrind --leak-check=full --show-leak-kinds=all -s ./a.out" !! ProcessLogger(
-          _ => {},
-          err => stderrBuf.append('\n').append(err)
-        )
-      } catch {
-        case e: RuntimeException =>
-          throw RuntimeException(stderrBuf.toString, e)
-      }
-    val valgrindOut = stderrBuf.toString
-    assert(stdout.trim() === expected.trim(), valgrindOut)
-    assert(valgrindOut.contains("ERROR SUMMARY: 0 errors"), valgrindOut)
+    valgrindCheck(code, "immediate-drop.c")("")
   }
 
   test("Basic main function") {
@@ -124,5 +120,47 @@ class ExecTests extends AnyFunSuite with SnapshotAssertions {
       """
 
     valgrindCheck(code, "contrived-needs-sorting.c")("")
+  }
+}
+
+object ExecTests {
+  def valgrindCheck(
+      parsedFile: ParsedFile,
+      snapshot: Option[String => Unit],
+      expected: Option[String],
+      print: Boolean = false
+  ): Unit = {
+    given typer: Typer = Typer.resolveAllTypes(parsedFile)
+    val generatedC = Translator.toC(parsedFile)
+
+    snapshot match {
+      case Some(assertSnapshot) => assertSnapshot(generatedC)
+      case None                 =>
+    }
+
+    if (print) {
+      Files.write(Path.of("foo.c"), generatedC.getBytes())
+    }
+
+    Compiler.invokeGCC(generatedC, "a.out")
+
+    val stderrBuf = StringBuilder()
+    val stdout =
+      try {
+        "valgrind --leak-check=full --show-leak-kinds=all -s ./a.out" !! ProcessLogger(
+          _ => {},
+          err => stderrBuf.append('\n').append(err)
+        )
+      } catch {
+        case e: RuntimeException =>
+          throw RuntimeException(stderrBuf.toString, e)
+      }
+    val valgrindOut = stderrBuf.toString
+    expected match {
+      case Some(expected) =>
+        assert(stdout.trim() == expected.trim(), valgrindOut)
+      case None =>
+    }
+    assert(valgrindOut.contains("ERROR SUMMARY: 0 errors"), valgrindOut)
   }
 }
