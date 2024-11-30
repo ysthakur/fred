@@ -512,11 +512,13 @@ object Translator {
           val fieldDef =
             objType.cases.head.fields.find(_.name.value == field.value).get
           val fieldType = bindings.types(fieldDef.typ.name)
+          val oldValue = newVar("oldValue")
           (
-            s"""|$valSetup
-                |${decrRc(fieldAccess, fieldType)}
+            s"""|${typeRefToC(fieldType.name)} $oldValue = $fieldAccess;
+                |$valSetup
                 |$fieldAccess = $valTranslated;
-                |${incrRc(fieldAccess, fieldType)}""".stripMargin,
+                |${incrRc(fieldAccess, fieldType)}
+                |${decrRc(oldValue, fieldType)}""".stripMargin,
             fieldAccess,
             valTeardown
           )

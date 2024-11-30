@@ -275,14 +275,15 @@ int main() {
   a->rc ++;
   struct List* b = new$List(new$Some(a), 2);
   b->rc ++;
-  $decr_Option(a->next);
+  struct Option* oldValue$0 = a->next;
   a->next = new$Some(b);
   a->next->rc ++;
+  $decr_Option(oldValue$0);
   a->next;
   printf("%d\n", a->value + b->value);
-  int ret$0 = 0;
+  int ret$1 = 0;
   $decr_List(b);
   $decr_List(a);
   processAllPCRs();
-  return ret$0;
+  return ret$1;
 }
