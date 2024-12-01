@@ -73,7 +73,7 @@ void addPCR(
   }
 
   struct PCR *pcr = malloc(sizeof(struct PCR));
-  fprintf(stderr, "[addPCR] Added PCR %p, prev = %p, scc: %d\n", pcr, *prev, scc);
+  fprintf(stderr, "[addPCR] Added PCR %p, prev = %p, scc: %d, obj: %p\n", pcr, *prev, scc, obj);
   pcr->obj = obj;
   pcr->markGray = markGray;
   pcr->scan = scan;
@@ -103,28 +103,46 @@ void removePCR(Common *obj, int scc)
   obj->addedPCR = 0;
   fprintf(stderr, "[removePCR] Trying to remove %p\n", obj);
 
+  struct PCRBucket **prevBucket = &pcrBuckets;
   struct PCRBucket *bucket = pcrBuckets;
   while (bucket->scc != scc)
   {
+    prevBucket = &bucket->next;
     bucket = bucket->next;
   }
 
-  struct PCR *head = bucket->first;
-  struct PCR **prev = &bucket->first;
+  if (bucket->first->obj == obj) {
+    if (bucket->last->obj == obj) {
+      // This was the only PCR in the bucket, so get rid of the bucket too
+      free(bucket->first);
+      *prevBucket = bucket->next;
+      free(bucket);
+      return;
+    } else {
+      bucket->first = bucket->first->next;
+      free(bucket->first);
+      return;
+    }
+  }
+
+  struct PCR *prev = bucket->first;
+  struct PCR *head = prev->next;
   while (head != NULL)
   {
     fprintf(stderr, "[removePCR] head = %p\n", head);
     if (head->obj == obj)
     {
-      fprintf(stderr, "[removePCR] Removed %p\n", head);
-      struct PCR *next = head->next;
+      fprintf(stderr, "[removePCR] Removed %p (obj=%p)\n", head, obj);
+      prev->next = head->next;
+      if (head == bucket->last) {
+        bucket->last = prev;
+      }
       free(head);
-      *prev = next;
       break;
     }
     else
     {
-      prev = &head->next;
+      prev = head;
       head = head->next;
     }
   }

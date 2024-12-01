@@ -4,7 +4,7 @@ import scala.jdk.CollectionConverters.*
 
 import org.scalacheck.Gen
 
-object GenerateTypes {
+object GenUtil {
   val SomeField = "value"
 
   case class GenTypeAux(refs: List[Int])
@@ -78,6 +78,122 @@ object GenerateTypes {
     }
 
     optTypes ::: safeTypes
+  }
+
+  /** Create a bunch of variables of the given types
+    *
+    * @param sccs
+    * @param numVars
+    *   Number of variables per type
+    * @return
+    *   Maps type names to variables for that type. The inner map maps variable
+    *   names to expressions for their values
+    */
+  def genVars(
+      sccs: List[Set[TypeDef]],
+      numVars: Int
+  ): Gen[Map[String, Map[String, Expr]]] = {
+    def helper(
+        typ: TypeDef,
+        prevTypes: Map[String, Map[String, Expr]]
+    ): Gen[Map[String, Expr]] = {
+      GenUtil
+        .sequence(1.to(numVars).map { i =>
+          GenUtil
+            .sequence(typ.cases.head.fields.map { field =>
+              prevTypes.get(field.typ.name) match {
+                case Some(vars) =>
+                  Gen
+                    .oneOf(vars.keySet)
+                    .map(field.name -> VarRef(_, Span.synth))
+                case None =>
+                  Gen.const(
+                    field.name -> CtorCall(
+                      Spanned(
+                        s"None${field.typ.name.stripPrefix("Opt")}",
+                        Span.synth
+                      ),
+                      Nil,
+                      Span.synth
+                    )
+                  )
+              }
+            })
+            .map { fieldArgs =>
+              CtorCall(typ.cases.head.name, fieldArgs, Span.synth)
+            }
+        })
+        .map { values =>
+          values.zipWithIndex.map { (value, i) =>
+            s"v${typ.name}_$i" -> value
+          }.toMap
+        }
+    }
+
+    sccs.foldRight(
+      Gen.const(Map.empty[String, Map[String, Expr]])
+    ) { (scc, prevVars) =>
+      prevVars.flatMap { prevVars =>
+        GenUtil
+          .sequence(
+            scc
+              .filterNot(_.name.startsWith("Opt"))
+              .map(typ => helper(typ, prevVars).map(typ.name -> _))
+          )
+          .map(_.toMap ++ prevVars)
+      }
+    }
+  }
+
+  /** @return
+    *   A list of expressions that assign objects to fields inside other
+    *   objects. Returned list is not shuffled
+    */
+  def genAssignments(
+      types: List[TypeDef],
+      vars: Map[String, Set[String]]
+  ): Gen[List[Expr]] = {
+    def helper(typ: TypeDef): Gen[List[Expr]] = {
+      val currVars = vars(typ.name)
+      GenUtil
+        .sequence(
+          typ.cases.head.fields.filter(_.typ.name.startsWith("Opt")).map {
+            field =>
+              val fieldType = field.typ.name.stripPrefix("Opt")
+              val candidates = vars
+                .getOrElse(
+                  fieldType,
+                  throw new RuntimeException(
+                    s"[createCycles] No such type: $fieldType"
+                  )
+                )
+              Gen.someOf(currVars).flatMap { vars =>
+                GenUtil.sequence(vars.map { varName =>
+                  Gen.oneOf(candidates).map { ref =>
+                    SetFieldExpr(
+                      Spanned(varName, Span.synth),
+                      field.name,
+                      CtorCall(
+                        Spanned(s"Some$fieldType", Span.synth),
+                        List(
+                          (
+                            Spanned(GenUtil.SomeField, Span.synth),
+                            VarRef(ref, Span.synth)
+                          )
+                        ),
+                        Span.synth
+                      ),
+                      Span.synth
+                    )
+                  }
+                })
+              }
+          }
+        )
+        .map(_.flatten)
+    }
+
+    GenUtil.sequence(types.map(helper)).map(_.flatten)
   }
 
   /** Generate a bunch of types. Each type is its own strongly-connected

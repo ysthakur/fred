@@ -14,7 +14,7 @@ class SCCTests
   /** This is just a helper to avoid typing out calls to the TypeDef ctor */
   def createFile(graph: Map[String, Set[(Boolean, String)]]): ParsedFile = {
     ParsedFile(
-      GenerateTypes.toTypeDefs(
+      GenUtil.toTypeDefs(
         graph.view
           .mapValues(_.map((mut, typeName) => (mut, s"f$typeName", typeName)))
           .toMap
@@ -124,7 +124,7 @@ class SCCTests
     // This doesn't check that the algorithm doesn't lump every single type
     // into the same SCC.
     forAll(
-      Gen.sized { GenerateTypes.genTypesFullRandom(_) }.map(ParsedFile(_, Nil))
+      Gen.sized { GenUtil.genTypesFullRandom(_) }.map(ParsedFile(_, Nil))
     ) { file =>
       val cycles = Cycles.fromFile(file)
       validateSccs(file, cycles)
@@ -138,8 +138,8 @@ class SCCTests
     // references to types that come earlier in the list (or themselves).
     // Therefore, each type is its own strongly-connected component.
     val gen = Gen.sized { numSccs =>
-      GenerateTypes.sequence(0.until(numSccs).map { i =>
-        Gen.listOf(Gen.chooseNum(0, i)).map(GenerateTypes.GenTypeAux(_))
+      GenUtil.sequence(0.until(numSccs).map { i =>
+        Gen.listOf(Gen.chooseNum(0, i)).map(GenUtil.GenTypeAux(_))
       })
     }
 

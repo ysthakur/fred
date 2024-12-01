@@ -15,8 +15,8 @@ class FuzzTests
   property("Simple generated programs") {
     given PropertyCheckConfiguration =
       PropertyCheckConfiguration(minSize = 1, sizeRange = 10)
-    forAll(GenerateTypes.genTypesAux().flatMap(GenerateTypes.genCode)) {
-      parsedFile => ExecTests.valgrindCheck(parsedFile, None, None)
+    forAll(GenUtil.genTypesAux().flatMap(GenUtil.genCode)) { parsedFile =>
+      ExecTests.valgrindCheck(parsedFile, None, None)
     }
   }
 
@@ -24,112 +24,17 @@ class FuzzTests
     given PropertyCheckConfiguration =
       PropertyCheckConfiguration(minSize = 1, sizeRange = 30)
 
-    def genVars(
-        typ: TypeDef,
-        prevTypes: Map[String, Map[String, Expr]]
-    ): Gen[Map[String, Expr]] = {
-      for {
-        size <- Gen.size
-        numVars <- Gen.choose(1, math.sqrt(size).ceil.toInt)
-        values <- GenerateTypes.sequence(1.to(numVars).map { i =>
-          GenerateTypes
-            .sequence(typ.cases.head.fields.map { field =>
-              prevTypes.get(field.typ.name) match {
-                case Some(vars) =>
-                  Gen
-                    .oneOf(vars.keySet)
-                    .map(field.name -> VarRef(_, Span.synth))
-                case None =>
-                  Gen.const(
-                    field.name -> CtorCall(
-                      Spanned(
-                        s"None${field.typ.name.stripPrefix("Opt")}",
-                        Span.synth
-                      ),
-                      Nil,
-                      Span.synth
-                    )
-                  )
-              }
-            })
-            .map { fieldArgs =>
-              CtorCall(typ.cases.head.name, fieldArgs, Span.synth)
-            }
-        })
-      } yield values.zipWithIndex.map { (value, i) =>
-        s"v${typ.name}_$i" -> value
-      }.toMap
-    }
-
-    /** @return A list of expressions that assign objects to create cycles */
-    def createCycles(
-        typ: TypeDef,
-        allVars: Map[String, Set[String]]
-    ): Gen[List[Expr]] = {
-      val currVars = allVars(typ.name)
-      GenerateTypes
-        .sequence(
-          typ.cases.head.fields.filter(_.typ.name.startsWith("Opt")).map {
-            field =>
-              val fieldType = field.typ.name.stripPrefix("Opt")
-              val candidates = allVars
-                .getOrElse(
-                  fieldType,
-                  throw new RuntimeException(
-                    s"[createCycles] No such type: $fieldType"
-                  )
-                )
-              Gen.someOf(currVars).flatMap { vars =>
-                GenerateTypes.sequence(vars.map { varName =>
-                  Gen.oneOf(candidates).map { ref =>
-                    SetFieldExpr(
-                      Spanned(varName, Span.synth),
-                      field.name,
-                      CtorCall(
-                        Spanned(s"Some$fieldType", Span.synth),
-                        List(
-                          (
-                            Spanned(GenerateTypes.SomeField, Span.synth),
-                            VarRef(ref, Span.synth)
-                          )
-                        ),
-                        Span.synth
-                      ),
-                      Span.synth
-                    )
-                  }
-                })
-              }
-          }
-        )
-        .map(_.flatten)
-    }
-
     val genFull = for {
       size <- Gen.size
-      rawTypes <- GenerateTypes.genTypesFullRandom(math.sqrt(size).ceil.toInt)
-      allTypes = GenerateTypes.addOptTypes(rawTypes)
+      numTypes <- Gen.choose(1, math.sqrt(size).toInt)
+      rawTypes <- GenUtil.genTypesFullRandom(numTypes)
+      allTypes = GenUtil.addOptTypes(rawTypes)
       sccs = Cycles.fromFile(ParsedFile(allTypes, Nil)).sccs
-      allVars <- sccs.foldRight(
-        Gen.const(Map.empty[String, Map[String, Expr]])
-      ) { (scc, prevVars) =>
-        prevVars.flatMap { prevVars =>
-          GenerateTypes
-            .sequence(
-              scc
-                .filterNot(_.name.startsWith("Opt"))
-                .map(typ => genVars(typ, prevVars).map(typ.name -> _))
-            )
-            .map(_.toMap ++ prevVars)
-        }
-      }
-      assignExprs <- GenerateTypes
-        .sequence(
-          allTypes.filterNot(_.name.startsWith("Opt")).map { typ =>
-            createCycles(typ, allVars.view.mapValues(_.keySet).toMap)
-          }
-        )
-        .map(_.flatten)
+      allVars <- GenUtil.genVars(sccs, size / numTypes)
+      assignExprs <- GenUtil.genAssignments(
+        allTypes.filterNot(_.name.startsWith("Opt")),
+        allVars.view.mapValues(_.keySet).toMap
+      )
     } yield {
       val finalRes = IntLiteral(0, Span.synth)
       val withAssignments = assignExprs.foldRight(finalRes: Expr)(
