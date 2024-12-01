@@ -16,24 +16,19 @@ object Translator {
         .flatMap(gen => file.typeDefs.map(td => (gen.decl(td), gen.impl(td))))
         .unzip
     val (fnDecls, fnImpls) = file.fns.map(helper.fnToC).unzip
-    val ctorDecls = file.typeDefs.flatMap(typ =>
-      typ.cases.map(variant => s"${ctorSig(typ, variant)};")
-    )
+    val ctorDecls = file.typeDefs
+      .flatMap(typ => typ.cases.map(variant => s"${ctorSig(typ, variant)};"))
     val ctorImpls = file.typeDefs.flatMap { typ =>
       typ.cases.map { variant =>
         s"${ctorSig(typ, variant)} {\n${indent(1)(ctorImpl(typ, variant))}\n}"
       }
     }
-    val generated =
-      file.typeDefs.map(helper.translateType).mkString("", "\n", "\n")
-        + genDecls.mkString("", "\n", "\n")
-        + ctorDecls.mkString("", "\n", "\n")
-        + fnDecls.mkString("", "\n", "\n")
-        + genImpls.mkString("", "\n", "\n")
-        + ctorImpls.mkString("", "\n", "\n")
-        + fnImpls.mkString("", "\n", "\n")
-    "#include \"runtime.h\"\n\n" + generated
-      .replaceAll(raw"\n(\s|\n)*\n", "\n")
+    val generated = file.typeDefs.map(helper.translateType)
+      .mkString("", "\n", "\n") + genDecls.mkString("", "\n", "\n") +
+      ctorDecls.mkString("", "\n", "\n") + fnDecls.mkString("", "\n", "\n") +
+      genImpls.mkString("", "\n", "\n") + ctorImpls.mkString("", "\n", "\n") +
+      fnImpls.mkString("", "\n", "\n")
+    "#include \"runtime.h\"\n\n" + generated.replaceAll(raw"\n(\s|\n)*\n", "\n")
       .strip() + "\n"
   }
 
@@ -65,8 +60,7 @@ object Translator {
       val myScc = cycles.sccMap(typ)
 
       val cases = switch(This, typ) {
-        case variant @ EnumCase(Spanned(ctorName, _), fields, _) =>
-          fields
+        case variant @ EnumCase(Spanned(ctorName, _), fields, _) => fields
             .map { case FieldDef(_, fieldName, fieldTypeRef, _) =>
               bindings.types(fieldTypeRef.name) match {
                 case fieldType: TypeDef if cycles.sccMap(fieldType) != myScc =>
@@ -74,8 +68,7 @@ object Translator {
                   s"${decrRc(s"$This->$mangled", fieldType)}"
                 case _ => ""
               }
-            }
-            .mkString("\n")
+            }.mkString("\n")
       }
 
       raw"""|fprintf(stderr, "Freeing ${typ.name}\n");
@@ -94,13 +87,11 @@ object Translator {
       // Cases for deleting the object
       val deleteCases = indent(1) {
         switch(This, typ) {
-          case variant @ EnumCase(Spanned(ctorName, _), fields, _) =>
-            fields
+          case variant @ EnumCase(Spanned(ctorName, _), fields, _) => fields
               .map { case FieldDef(_, fieldName, fieldType, _) =>
                 val mangled = cFieldName(fieldName.value, typ, variant)
                 s"${decrRc(s"$This->$mangled", bindings.types(fieldType.name))}"
-              }
-              .mkString("\n")
+              }.mkString("\n")
         }
       }
       val scc = cycles.sccMap(typ)
@@ -130,24 +121,19 @@ object Translator {
         typ: TypeDef
     )(using bindings: Bindings, cycles: Cycles): String = {
       val myScc = cycles.sccMap(typ)
-      val recMarks =
-        switch(This, typ) { variant =>
-          variant.fields
-            .map { case FieldDef(_, fieldName, fieldTypeRef, _) =>
-              val mangled = cFieldName(fieldName.value, typ, variant)
-              bindings.types(fieldTypeRef.name) match {
-                case fieldType: TypeDef =>
-                  if (cycles.sccMap(fieldType) == myScc) {
-                    s"""|$This->$mangled->rc --;
-                        |${MarkGray.name(fieldType)}($This->$mangled);""".stripMargin
-                  } else {
-                    ""
-                  }
-                case _ => ""
-              }
-            }
-            .mkString("\n")
-        }
+      val recMarks = switch(This, typ) { variant =>
+        variant.fields.map { case FieldDef(_, fieldName, fieldTypeRef, _) =>
+          val mangled = cFieldName(fieldName.value, typ, variant)
+          bindings.types(fieldTypeRef.name) match {
+            case fieldType: TypeDef =>
+              if (cycles.sccMap(fieldType) == myScc) {
+                s"""|$This->$mangled->rc --;
+                    |${MarkGray.name(fieldType)}($This->$mangled);""".stripMargin
+              } else { "" }
+            case _ => ""
+          }
+        }.mkString("\n")
+      }
 
       s"""|if ($This->color == kGray) return;
           |$This->color = kGray;
@@ -162,21 +148,18 @@ object Translator {
         typ: TypeDef
     )(using bindings: Bindings, cycles: Cycles): String = {
       val myScc = cycles.sccMap(typ)
-      val recScan =
-        switch(This, typ) { variant =>
-          variant.fields
-            .map { case FieldDef(_, fieldName, fieldTypeRef, _) =>
-              val mangled = cFieldName(fieldName.value, typ, variant)
-              bindings.types(fieldTypeRef.name) match {
-                case fieldType: TypeDef =>
-                  if (cycles.sccMap(fieldType) == myScc)
-                    s"${Scan.name(fieldType)}($This->$mangled);"
-                  else ""
-                case _ => ""
-              }
-            }
-            .mkString("\n")
-        }
+      val recScan = switch(This, typ) { variant =>
+        variant.fields.map { case FieldDef(_, fieldName, fieldTypeRef, _) =>
+          val mangled = cFieldName(fieldName.value, typ, variant)
+          bindings.types(fieldTypeRef.name) match {
+            case fieldType: TypeDef =>
+              if (cycles.sccMap(fieldType) == myScc)
+                s"${Scan.name(fieldType)}($This->$mangled);"
+              else ""
+            case _ => ""
+          }
+        }.mkString("\n")
+      }
 
       s"""|if ($This->color != kGray) return;
           |if ($This->rc > 0) {
@@ -197,21 +180,18 @@ object Translator {
       val myScc = cycles.sccMap(typ)
       val recScan = indent(1) {
         switch(This, typ) { variant =>
-          variant.fields
-            .map { case FieldDef(_, fieldName, fieldTypeRef, _) =>
-              val mangled = cFieldName(fieldName.value, typ, variant)
-              bindings.types(fieldTypeRef.name) match {
-                case fieldType: TypeDef =>
-                  if (cycles.sccMap(fieldType) == myScc) {
-                    s"""|$This->$mangled->rc ++;
-                        |${ScanBlack.name(fieldType)}($This->$mangled);""".stripMargin
-                  } else {
-                    ""
-                  }
-                case _ => ""
-              }
+          variant.fields.map { case FieldDef(_, fieldName, fieldTypeRef, _) =>
+            val mangled = cFieldName(fieldName.value, typ, variant)
+            bindings.types(fieldTypeRef.name) match {
+              case fieldType: TypeDef =>
+                if (cycles.sccMap(fieldType) == myScc) {
+                  s"""|$This->$mangled->rc ++;
+                      |${ScanBlack.name(fieldType)}($This->$mangled);"""
+                    .stripMargin
+                } else { "" }
+              case _ => ""
             }
-            .mkString("\n")
+          }.mkString("\n")
         }
       }
       s"""|if ($This->color != kBlack) {
@@ -229,16 +209,14 @@ object Translator {
     )(using bindings: Bindings, cycles: Cycles): String = {
       val rec = indent(1) {
         switch(This, typ) { variant =>
-          variant.fields
-            .map { case FieldDef(_, fieldName, fieldTypeRef, _) =>
-              val mangled = cFieldName(fieldName.value, typ, variant)
-              bindings.types(fieldTypeRef.name) match {
-                case fieldType: TypeDef =>
-                  s"${CollectWhite.name(fieldType)}($This->$mangled);"
-                case _ => ""
-              }
+          variant.fields.map { case FieldDef(_, fieldName, fieldTypeRef, _) =>
+            val mangled = cFieldName(fieldName.value, typ, variant)
+            bindings.types(fieldTypeRef.name) match {
+              case fieldType: TypeDef =>
+                s"${CollectWhite.name(fieldType)}($This->$mangled);"
+              case _ => ""
             }
-            .mkString("\n")
+          }.mkString("\n")
         }
       }
       raw"""|if ($This->color == kWhite) {
@@ -269,8 +247,7 @@ object Translator {
               raw"""|printf("${fieldName.value}=");
                     |${callPrint(s"$This->$mangled", bindings.types(fieldType.name))}
                     |printf(", ");""".stripMargin
-            }
-            .mkString("\n")
+            }.mkString("\n")
 
           s"""|printf("$ctorName {");
               |$printFields
@@ -283,8 +260,7 @@ object Translator {
     s"new$$${variant.name.value}"
 
   private def ctorSig(typ: TypeDef, variant: EnumCase): String = {
-    val params = variant.fields.toSeq
-      .sortBy(_.name.value)
+    val params = variant.fields.toSeq.sortBy(_.name.value)
       .map(field => s"${typeRefToC(field.typ.name)} ${field.name.value}")
       .mkString(", ")
     s"${typeRefToC(typ.name)} ${ctorName(variant)}($params)"
@@ -294,14 +270,12 @@ object Translator {
       bindings: Bindings
   ): String = {
     val resVar = "$res"
-    val setFields = variant.fields
-      .map { field =>
-        val fieldAccess =
-          s"$resVar->${cFieldName(field.name.value, typ, variant)}"
-        s"""|$fieldAccess = ${field.name.value};
-            |${incrRc(fieldAccess, bindings.getType(field.typ))}""".stripMargin
-      }
-      .mkString("\n")
+    val setFields = variant.fields.map { field =>
+      val fieldAccess =
+        s"$resVar->${cFieldName(field.name.value, typ, variant)}"
+      s"""|$fieldAccess = ${field.name.value};
+          |${incrRc(fieldAccess, bindings.getType(field.typ))}""".stripMargin
+    }.mkString("\n")
     s"""|${typeRefToC(typ.name)} $resVar = malloc(sizeof (struct ${typ.name}));
         |$resVar->rc = 0;
         |$resVar->color = kBlack;
@@ -315,13 +289,11 @@ object Translator {
   private def switch(expr: String, typ: TypeDef)(
       createArm: EnumCase => String
   ): String = {
-    val armsToC = typ.cases
-      .map { variant =>
-        s"""|case ${tagName(variant.name.value)}:
-            |${indent(1)(createArm(variant))}
-            |  break;""".stripMargin
-      }
-      .mkString("\n")
+    val armsToC = typ.cases.map { variant =>
+      s"""|case ${tagName(variant.name.value)}:
+          |${indent(1)(createArm(variant))}
+          |  break;""".stripMargin
+    }.mkString("\n")
     s"""|switch ($expr->kind) {
         |$armsToC
         |}""".stripMargin
@@ -350,11 +322,8 @@ object Translator {
   }
 
   private def incrRc(expr: String, typ: Type) = {
-    if (typ.isInstanceOf[TypeDef]) {
-      s"$expr->rc ++;"
-    } else {
-      ""
-    }
+    if (typ.isInstanceOf[TypeDef]) { s"$expr->rc ++;" }
+    else { "" }
   }
 
   private def decrRc(expr: String, typ: Type) = {
@@ -399,44 +368,35 @@ object Translator {
 
     def translateType(typ: TypeDef): String = {
       val name = typ.name
-      val tagNames =
-        typ.cases.map(enumCase => tagName(enumCase.name.value)).mkString(", ")
+      val tagNames = typ.cases.map(enumCase => tagName(enumCase.name.value))
+        .mkString(", ")
       val tagEnum = s"enum ${name}_kind { ${tagNames} };"
 
       val mangledFields = mutable.Map.empty[String, String]
 
-      val commonFields =
-        typ.cases.head.fields.filter { field =>
-          typ.hasCommonField(field.name.value)
-        }
-      val commonFieldsToC = commonFields
-        .map { field =>
-          s"  ${typeRefToC(field.typ.name)} ${field.name.value};"
-        }
-        .mkString("\n")
-      mangledFields ++= commonFields.map(field =>
-        field.name.value -> field.name.value
-      )
+      val commonFields = typ.cases.head.fields.filter { field =>
+        typ.hasCommonField(field.name.value)
+      }
+      val commonFieldsToC = commonFields.map { field =>
+        s"  ${typeRefToC(field.typ.name)} ${field.name.value};"
+      }.mkString("\n")
+      mangledFields ++=
+        commonFields.map(field => field.name.value -> field.name.value)
 
-      val cases = typ.cases
-        .map { enumCase =>
-          val variantFields = enumCase.fields
-            .filter { field =>
-              commonFields.forall(_.name.value != field.name.value)
-            }
-
-          mangledFields ++= variantFields.map(field =>
-            field.name.value -> mangledFieldName(enumCase, field.name.value)
-          )
-
-          val fields = variantFields
-            .map { field =>
-              s"${typeRefToC(field.typ.name)} ${mangledFieldName(enumCase, field.name.value)};"
-            }
-            .mkString(" ")
-          s"struct { $fields };"
+      val cases = typ.cases.map { enumCase =>
+        val variantFields = enumCase.fields.filter { field =>
+          commonFields.forall(_.name.value != field.name.value)
         }
-        .mkString("\n    ")
+
+        mangledFields ++= variantFields.map(field =>
+          field.name.value -> mangledFieldName(enumCase, field.name.value)
+        )
+
+        val fields = variantFields.map { field =>
+          s"${typeRefToC(field.typ.name)} ${mangledFieldName(enumCase, field.name.value)};"
+        }.mkString(" ")
+        s"struct { $fields };"
+      }.mkString("\n    ")
 
       mangledFieldsFor.put(typ, mangledFields.toMap)
 
@@ -509,8 +469,8 @@ object Translator {
           val (valSetup, valTranslated, valTeardown) = exprToC(value)
           val fieldAccess = s"${obj.value}->${field.value}"
           val objType = bindings.vars(obj.value).typ.asInstanceOf[TypeDef]
-          val fieldDef =
-            objType.cases.head.fields.find(_.name.value == field.value).get
+          val fieldDef = objType.cases.head.fields
+            .find(_.name.value == field.value).get
           val fieldType = bindings.types(fieldDef.typ.name)
           val oldValue = newVar("oldValue")
           (
@@ -541,15 +501,12 @@ object Translator {
           val (valueSetup, valueToC, valueTeardown) = exprToC(value)
           val typ = typer.types(value)
           val shouldMangle = bindings.vars.contains(name.value)
-          val newBindings =
-            bindings.withVar(name.value, VarDef.Let(letExpr, typ))
+          val newBindings = bindings
+            .withVar(name.value, VarDef.Let(letExpr, typ))
           val mangledName =
             if (shouldMangle) newMangledVar(name.value) else name.value
           if (shouldMangle) {
-            mangledVars.put(
-              bindings.vars(name.value),
-              mangledName
-            )
+            mangledVars.put(bindings.vars(name.value), mangledName)
           }
           val (letSetup, letTeardown) = addBinding(mangledName, valueToC, typ)
           val (bodySetup, bodyToC, bodyTeardown) =
@@ -593,8 +550,7 @@ object Translator {
           val (typ, variant) = bindings.ctors(ctorNameSpanned.value)
           val (setups, args, teardowns) = values.toSeq
             .sortBy((fieldName, _) => fieldName.value)
-            .map((_, value) => exprToC(value))
-            .unzip3
+            .map((_, value) => exprToC(value)).unzip3
           (
             setups.mkString("\n"),
             s"${ctorName(variant)}(${args.mkString(", ")})",
@@ -609,13 +565,13 @@ object Translator {
 
           val armsToC = arms.map {
             case MatchArm(pat @ MatchPattern(ctorName, patBindings), body, _) =>
-              val variant =
-                objType.cases.find(_.name.value == ctorName.value).get
+              val variant = objType.cases.find(_.name.value == ctorName.value)
+                .get
               val oldBindings = bindings
-              given newBindings: Bindings =
-                oldBindings.enterPattern(matchExpr, pat, objType)
-              val (bindingSetups, bindingTeardowns) =
-                patBindings.map { (fieldName, varName) =>
+              given newBindings: Bindings = oldBindings
+                .enterPattern(matchExpr, pat, objType)
+              val (bindingSetups, bindingTeardowns) = patBindings
+                .map { (fieldName, varName) =>
                   val fieldNameMangled =
                     if (objType.hasCommonField(fieldName.value)) fieldName.value
                     else mangledFieldName(variant, fieldName.value)
@@ -624,20 +580,15 @@ object Translator {
                     if (shouldMangle) newMangledVar(varName.value)
                     else varName.value
                   if (shouldMangle) {
-                    mangledVars.put(
-                      newBindings.vars(varName.value),
-                      mangledVarName
-                    )
+                    mangledVars
+                      .put(newBindings.vars(varName.value), mangledVarName)
                   }
                   addBinding(
                     mangledVarName,
                     s"$objVar->$fieldNameMangled",
                     newBindings.types(
-                      variant.fields
-                        .find(_.name.value == fieldName.value)
-                        .get
-                        .typ
-                        .name
+                      variant.fields.find(_.name.value == fieldName.value).get
+                        .typ.name
                     )
                   )
                 }.unzip

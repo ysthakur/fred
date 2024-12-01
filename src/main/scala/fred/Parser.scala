@@ -32,9 +32,7 @@ object Parser {
     val idStart = alpha | P.char('_')
     val idPart = alpha | digit | P.char('_')
     val id: P[String] = (idStart ~ idPart.rep0).string
-      .filter(!Keywords.contains(_))
-      .backtrack
-      .withContext("identifier")
+      .filter(!Keywords.contains(_)).backtrack.withContext("identifier")
 
     val spannedId: P[Spanned[String]] = spanned(id)
 
@@ -43,141 +41,114 @@ object Parser {
         Spanned(parsed, Span(start, end))
       }
 
-    def keyword(kw: String): P[Unit] =
-      P.string(kw).soft *> P.peek(!idPart)
-      // id.backtrack.filter(kw == _) *> P.unit
+    def keyword(kw: String): P[Unit] = P.string(kw).soft *> P.peek(!idPart)
+    // id.backtrack.filter(kw == _) *> P.unit
 
-    def inParens[A](parser: P0[A]): P[A] =
-      P.char('(') *> ws *> parser <* ws <* P.char(')')
-    def inBraces[A](parser: P0[A]): P[A] =
-      P.char('{') *> ws *> parser <* ws <* P.char('}')
+    def inParens[A](parser: P0[A]): P[A] = P.char('(') *> ws *> parser <* ws <*
+      P.char(')')
+    def inBraces[A](parser: P0[A]): P[A] = P.char('{') *> ws *> parser <* ws <*
+      P.char('}')
 
     val expr: P[Expr] = P.defer(exprLazy <* ws)
 
     val letExpr: P[Expr] =
       (spanned(
-        (keyword("let") *> ws *> spannedId <* ws <* P.char('=') <* ws)
-          ~ (expr <* ws <* keyword("in") <* ws)
-      )
-        ~ expr)
-        .map { case (Spanned((name, value), span), body) =>
-          LetExpr(name, value, body, span)
-        }
-        .withContext("let expr")
+        (keyword("let") *> ws *> spannedId <* ws <* P.char('=') <* ws) ~
+          (expr <* ws <* keyword("in") <* ws)
+      ) ~ expr).map { case (Spanned((name, value), span), body) =>
+        LetExpr(name, value, body, span)
+      }.withContext("let expr")
 
-    val ifExpr: P[Expr] =
-      spanned(
-        keyword("if") *> ws
-          *> (expr <* ws <* keyword("then") <* ws)
-          ~ (expr <* ws <* keyword("else") <* ws)
-          ~ expr
-      ).map { case Spanned(cond -> thenBody -> elseBody, span) =>
-        IfExpr(cond, thenBody, elseBody, span)
-      }.withContext("if expr")
+    val ifExpr: P[Expr] = spanned(
+      keyword("if") *> ws *> (expr <* ws <* keyword("then") <* ws) ~
+        (expr <* ws <* keyword("else") <* ws) ~ expr
+    ).map { case Spanned(cond -> thenBody -> elseBody, span) =>
+      IfExpr(cond, thenBody, elseBody, span)
+    }.withContext("if expr")
 
-    val intLiteral: P[Expr] = (digit.rep.string ~ P.index)
-      .map { case (num, end) =>
-        IntLiteral(num.toInt, Span(end - num.length, end))
-      }
-      .withContext("int literal")
-    val stringLiteral: P[StringLiteral] =
-      spanned(
-        P.char('"')
-          *> ((P.char('\\') ~ P.anyChar) | (P.charWhere(_ != '"'))).rep.string
-          <* P.char('"')
-      ).map { case Spanned(text, span) => StringLiteral(text, span) }
-        .withContext("str literal")
+    val intLiteral: P[Expr] = (digit.rep.string ~ P.index).map {
+      case (num, end) => IntLiteral(num.toInt, Span(end - num.length, end))
+    }.withContext("int literal")
+    val stringLiteral: P[StringLiteral] = spanned(
+      P.char('"') *> ((P.char('\\') ~ P.anyChar) | (P.charWhere(_ != '"'))).rep
+        .string <* P.char('"')
+    ).map { case Spanned(text, span) => StringLiteral(text, span) }
+      .withContext("str literal")
     val literal = intLiteral | stringLiteral
     val parenExpr = inParens(expr).withContext("paren expr")
     val varRefOrFnCallOrCtorCall =
-      (P.index.with1 ~ (id <* ws)
-        ~ inParens(expr.repSep0(P.char(',') *> ws))
-          .eitherOr(
-            inBraces(
-              ((spannedId <* ws <* P.char(':') <* ws) ~ expr)
-                .repSep0(P.char(',') *> ws)
-            )
+      (P.index.with1 ~ (id <* ws) ~ inParens(expr.repSep0(P.char(',') *> ws))
+        .eitherOr(inBraces(
+          ((spannedId <* ws <* P.char(':') <* ws) ~ expr)
+            .repSep0(P.char(',') *> ws)
+        )).? ~ P.index).map {
+        case (start -> name -> None -> end) =>
+          VarRef(name, Span(start, start + name.length))
+        case (start -> name -> Some(Right(args)) -> end) => FnCall(
+            Spanned(name, Span(start, start + name.length)),
+            args,
+            None,
+            None,
+            Span(start, end)
           )
-          .? ~ P.index)
-        .map {
-          case (start -> name -> None -> end) =>
-            VarRef(name, Span(start, start + name.length))
-          case (start -> name -> Some(Right(args)) -> end) =>
-            FnCall(
-              Spanned(name, Span(start, start + name.length)),
-              args,
-              None,
-              None,
-              Span(start, end)
-            )
-          case (start -> name -> Some(Left(values)) -> end) =>
-            CtorCall(
-              Spanned(name, Span(start, start + name.length)),
-              values,
-              Span(start, end)
-            )
-        }
+        case (start -> name -> Some(Left(values)) -> end) => CtorCall(
+            Spanned(name, Span(start, start + name.length)),
+            values,
+            Span(start, end)
+          )
+      }
     val selectable: P[Expr] = varRefOrFnCallOrCtorCall | parenExpr | literal
     val fieldAccess: P[Expr] =
       ((selectable <* ws) ~ (P.char('.') *> ws *> spannedId <* ws).rep0).map {
-        case (obj, fields) =>
-          fields.foldLeft(obj) { (obj, field) => FieldAccess(obj, field, None) }
+        case (obj, fields) => fields.foldLeft(obj) { (obj, field) =>
+            FieldAccess(obj, field, None)
+          }
       }
     val binOp1 = binOp(fieldAccess, P.stringIn(List("*", "/")))
     val binOp2 = binOp(binOp1, P.stringIn(List("+", "-")))
     val binOp3 = binOp(binOp2, P.stringIn(List(">=", "<=", ">", "<", "==")))
 
-    val matchPattern: P[MatchPattern] = (
-      (spannedId <* ws) ~ inBraces(
+    val matchPattern: P[MatchPattern] =
+      ((spannedId <* ws) ~ inBraces(
         ((spannedId <* ws <* P.char(':') <* ws) ~ spannedId <* ws)
           .repSep0(P.char(',') <* ws)
-      )
-    ).map { case (ctorName, bindings) =>
-      MatchPattern(ctorName, bindings)
-    }
+      )).map { case (ctorName, bindings) => MatchPattern(ctorName, bindings) }
     val matchArm: P[MatchArm] =
-      spanned((matchPattern <* ws <* P.string("=>") <* ws) ~ expr)
-        .map { case Spanned((pat, body), span) =>
-          MatchArm(pat, body, span)
-        }
-        .withContext("match arm")
+      spanned((matchPattern <* ws <* P.string("=>") <* ws) ~ expr).map {
+        case Spanned((pat, body), span) => MatchArm(pat, body, span)
+      }.withContext("match arm")
     val matchExpr =
-      ((binOp3 <* ws)
-        ~ spanned(
-          keyword("match") *> ws
-            *> inBraces((matchArm <* ws).repSep0(P.char(',') *> ws)) <* ws
-        ).rep0)
-        .map { case (obj, matches) =>
-          matches.foldLeft(obj) { case (obj, Spanned(matchArms, armsSpan)) =>
-            MatchExpr(obj, matchArms, armsSpan)
-          }
+      ((binOp3 <* ws) ~ spanned(
+        keyword("match") *>
+          ws *> inBraces((matchArm <* ws).repSep0(P.char(',') *> ws)) <* ws
+      ).rep0).map { case (obj, matches) =>
+        matches.foldLeft(obj) { case (obj, Spanned(matchArms, armsSpan)) =>
+          MatchExpr(obj, matchArms, armsSpan)
         }
+      }
 
-    val setFieldExpr: P[Expr] =
-      P.defer(
-        ((P.index.soft <* keyword("set") <* ws).with1 ~ (spannedId <* ws <* P
-          .char(
-            '.'
-          ) <* ws) ~ (spannedId <* ws) ~ seqAbleExpr).map {
-          case (start -> lhsVar -> lhsField -> value) =>
-            SetFieldExpr(lhsVar, lhsField, value, Span(start, value.span.end))
-        }
-      )
+    val setFieldExpr: P[Expr] = P.defer(
+      ((P.index.soft <* keyword("set") <* ws).with1 ~
+        (spannedId <* ws <* P.char('.') <* ws) ~ (spannedId <* ws) ~
+        seqAbleExpr).map { case (start -> lhsVar -> lhsField -> value) =>
+        SetFieldExpr(lhsVar, lhsField, value, Span(start, value.span.end))
+      }
+    )
 
     val seqAbleExpr: P[Expr] = ifExpr | matchExpr | setFieldExpr
     val seqExpr = binOp(seqAbleExpr, P.stringIn(List(";")))
     def binOp(prev: P[Expr], op: P[String]): P[Expr] =
       ((prev <* ws) ~ (op ~ (P.index <* ws) ~ prev <* ws).rep0).map {
-        case (left, reps) =>
-          reps.foldLeft(left) { case (lhs, op -> opEnd -> rhs) =>
-            val binop = BinOp.values.find(_.text == op).get
-            BinExpr(
-              lhs,
-              Spanned(binop, Span(opEnd - op.length, opEnd)),
-              rhs,
-              None
-            )
-          }
+        case (left, reps) => reps
+            .foldLeft(left) { case (lhs, op -> opEnd -> rhs) =>
+              val binop = BinOp.values.find(_.text == op).get
+              BinExpr(
+                lhs,
+                Spanned(binop, Span(opEnd - op.length, opEnd)),
+                rhs,
+                None
+              )
+            }
       }
 
     lazy val exprLazy: P[Expr] = letExpr | seqExpr
@@ -186,43 +157,43 @@ object Parser {
       TypeRef(name, Span(start, start + name.length))
     }
 
-    val param: P[Param] =
-      ((spannedId <* ws <* P.char(':') <* ws) ~ typeRef).map(Param(_, _))
+    val param: P[Param] = ((spannedId <* ws <* P.char(':') <* ws) ~ typeRef)
+      .map(Param(_, _))
 
-    val fnDef: P[FnDef] = ((P.index.with1 <* keyword("fn") <* ws)
-      ~ (spannedId <* ws <* P.char('(') <* ws)
-      ~ ((param <* ws).repSep0(P.char(',') *> ws) <* ws <* P.char(')') <* ws)
-      ~ (P.char(':') *> ws *> typeRef <* ws)
-      ~ (P.char('=') *> ws *> expr)).map {
-      case (start -> name -> params -> returnType -> body) =>
-        FnDef(name, params, returnType, body, Span(start, body.span.end))
-    }
+    val fnDef: P[FnDef] =
+      ((P.index.with1 <* keyword("fn") <* ws) ~
+        (spannedId <* ws <* P.char('(') <* ws) ~
+        ((param <* ws).repSep0(P.char(',') *> ws) <* ws <* P.char(')') <* ws) ~
+        (P.char(':') *> ws *> typeRef <* ws) ~
+        (P.char('=') *> ws *> expr)).map {
+        case (start -> name -> params -> returnType -> body) =>
+          FnDef(name, params, returnType, body, Span(start, body.span.end))
+      }
 
     val fieldDef: P[FieldDef] =
-      ((P.index.soft ~ (keyword("mut") *> ws).backtrack.?).with1
-        ~ (spannedId <* ws <* P.char(':') <* ws)
-        ~ typeRef)
-        .map { case (start -> mutable -> name -> typ) =>
+      ((P.index.soft ~ (keyword("mut") *> ws).backtrack.?).with1 ~
+        (spannedId <* ws <* P.char(':') <* ws) ~ typeRef).map {
+        case (start -> mutable -> name -> typ) =>
           FieldDef(mutable.isDefined, name, typ, Span(start, typ.span.end))
-        }
+      }
 
     val enumCase: P[EnumCase] =
-      ((spannedId <* ws)
-        ~ inBraces((fieldDef <* ws).repSep0(P.char(',') *> ws))
-        ~ P.index <* ws).map { case (name -> fields -> end) =>
+      ((spannedId <* ws) ~ inBraces(
+        (fieldDef <* ws).repSep0(P.char(',') *> ws)
+      ) ~ P.index <* ws).map { case (name -> fields -> end) =>
         EnumCase(name, fields, Span(name.span.start, end))
       }
 
     val enumDef: P[TypeDef] =
-      (P.index.with1.soft
-        ~ (keyword("data") *> ws *> spannedId <* ws <* P.char('=') <* ws)
-        ~ enumCase.repSep0(P.char('|') *> ws) ~ P.index <* ws).map {
+      (P.index.with1.soft ~
+        (keyword("data") *> ws *> spannedId <* ws <* P.char('=') <* ws) ~
+        enumCase.repSep0(P.char('|') *> ws) ~ P.index <* ws).map {
         case (start -> name -> cases -> end) =>
           TypeDef(name, cases, Span(start, end))
       }
 
-    val fileParser =
-      (ws *> (enumDef <* ws).rep0 ~ (fnDef <* ws).rep0).map(ParsedFile(_, _))
+    val fileParser = (ws *> (enumDef <* ws).rep0 ~ (fnDef <* ws).rep0)
+      .map(ParsedFile(_, _))
     // (ws *> (fnDef <* ws).rep0).map(ParsedFile(Nil, _))
   }
 }

@@ -150,9 +150,11 @@ object GenUtil {
     *   objects. Returned list is not shuffled
     */
   def genAssignments(
-      types: List[TypeDef],
+      allTypes: List[TypeDef],
       vars: Map[String, Set[String]]
   ): Gen[List[Expr]] = {
+    val types = allTypes.filterNot(_.name.startsWith("Opt"))
+
     def helper(typ: TypeDef): Gen[List[Expr]] = {
       val currVars = vars(typ.name)
       GenUtil
@@ -164,7 +166,7 @@ object GenUtil {
                 .getOrElse(
                   fieldType,
                   throw new RuntimeException(
-                    s"[createCycles] No such type: $fieldType"
+                    s"[genAssignments] No such type: $fieldType"
                   )
                 )
               Gen.someOf(currVars).flatMap { vars =>
@@ -246,9 +248,7 @@ object GenUtil {
       }
       TypeDef(
         spannedName,
-        List(
-          EnumCase(spannedName, fields, Span.synth)
-        ),
+        List(EnumCase(spannedName, fields, Span.synth)),
         Span.synth
       )
     }.toList

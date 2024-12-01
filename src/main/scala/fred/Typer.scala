@@ -26,23 +26,20 @@ case class Bindings(
 
     val ctor = typ.cases.find(_.name.value == pat.ctorName.value) match {
       case Some(variant) => variant
-      case None =>
-        throw new CompileError(
+      case None => throw new CompileError(
           s"No such constructor: ${pat.ctorName.value}",
           pat.ctorName.span
         )
     }
 
     for ((fieldName, varName) <- pat.bindings) {
-      val typ =
-        ctor.fields.find(_.name.value == fieldName.value) match {
-          case Some(fieldDef) => this.getType(fieldDef.typ)
-          case None =>
-            throw new CompileError(
-              s"No such field: ${fieldName.value}",
-              fieldName.span
-            )
-        }
+      val typ = ctor.fields.find(_.name.value == fieldName.value) match {
+        case Some(fieldDef) => this.getType(fieldDef.typ)
+        case None => throw new CompileError(
+            s"No such field: ${fieldName.value}",
+            fieldName.span
+          )
+      }
       newVars.put(
         varName.value,
         VarDef.Pat(matchExpr, pat, fieldName.value, varName.value, typ)
@@ -52,29 +49,27 @@ case class Bindings(
     this.copy(vars = newVars.toMap)
   }
 
-  def withVar(varName: String, varDef: VarDef): Bindings =
-    this.copy(vars = this.vars + (varName -> varDef))
+  def withVar(varName: String, varDef: VarDef): Bindings = this
+    .copy(vars = this.vars + (varName -> varDef))
 
-  def getVar(varRef: VarRef): VarDef =
-    vars.get(varRef.name) match {
-      case Some(varDef) => varDef
-      case None =>
-        throw new CompileError(s"Unknown variable: ${varRef.name}", varRef.span)
-    }
+  def getVar(varRef: VarRef): VarDef = vars.get(varRef.name) match {
+    case Some(varDef) => varDef
+    case None =>
+      throw new CompileError(s"Unknown variable: ${varRef.name}", varRef.span)
+  }
 
-  def getType(typeRef: TypeRef): Type =
-    types.get(typeRef.name) match {
-      case Some(typ) => typ
-      case None =>
-        throw new CompileError(s"No such type: ${typeRef.name}", typeRef.span)
-    }
+  def getType(typeRef: TypeRef): Type = types.get(typeRef.name) match {
+    case Some(typ) => typ
+    case None =>
+      throw new CompileError(s"No such type: ${typeRef.name}", typeRef.span)
+  }
 }
 
 object Bindings {
   def fromFile(file: ParsedFile): Bindings = {
     Bindings(
-      types = file.typeDefs.map(typeDef => (typeDef.name, typeDef)).toMap
-        ++ Map("int" -> BuiltinType.Int, "str" -> BuiltinType.Str),
+      types = file.typeDefs.map(typeDef => (typeDef.name, typeDef)).toMap ++
+        Map("int" -> BuiltinType.Int, "str" -> BuiltinType.Str),
       ctors = file.typeDefs.flatMap { typeDef =>
         typeDef.cases.map(variant => (variant.name.value, (typeDef, variant)))
       }.toMap,
@@ -123,23 +118,21 @@ object Typer {
         types.put(expr, typ)
         typ
       case SetFieldExpr(obj, field, value, span) =>
-        val objType =
-          bindings.getVar(VarRef(obj.value, obj.span)).typ match {
-            case td: TypeDef => td
-            case builtinType =>
-              throw new CompileError(
-                s"Can't set fields on $builtinType",
-                obj.span
-              )
-          }
+        val objType = bindings.getVar(VarRef(obj.value, obj.span)).typ match {
+          case td: TypeDef => td
+          case builtinType => throw new CompileError(
+              s"Can't set fields on $builtinType",
+              obj.span
+            )
+        }
         if (!objType.hasCommonField(field.value)) {
           throw new CompileError(
             s"${field.value} isn't a common field in ${objType.name}",
             field.span
           )
         }
-        val fieldTypeRef =
-          objType.cases.head.fields.find(_.name.value == field.value).get.typ
+        val fieldTypeRef = objType.cases.head.fields
+          .find(_.name.value == field.value).get.typ
         val typ = bindings.getType(fieldTypeRef)
         resolveExprType(value, bindings, types)
         types.put(expr, typ)
@@ -159,8 +152,8 @@ object Typer {
             field.span
           )
         }
-        val fieldTypeRef =
-          objType.cases.head.fields.find(_.name.value == field.value).get.typ
+        val fieldTypeRef = objType.cases.head.fields
+          .find(_.name.value == field.value).get.typ
         val typ = bindings.getType(fieldTypeRef)
         types.put(expr, typ)
         typ
@@ -207,10 +200,7 @@ object Typer {
               types.put(expr, BuiltinType.Int)
               BuiltinType.Int
             } else {
-              throw new CompileError(
-                s"No such function: $name",
-                nameSpan
-              )
+              throw new CompileError(s"No such function: $name", nameSpan)
             }
         }
       case CtorCall(Spanned(ctorName, ctorNameSpan), values, span) =>
@@ -234,8 +224,7 @@ object Typer {
         }
         types.put(expr, typ)
         typ
-      case BinExpr(lhs, op, rhs, typ) =>
-        op.value match {
+      case BinExpr(lhs, op, rhs, typ) => op.value match {
           case BinOp.Plus | BinOp.Minus | BinOp.Mul | BinOp.Div | BinOp.Eq |
               BinOp.Lt | BinOp.Lteq | BinOp.Gt | BinOp.Gteq =>
             if (resolveExprType(lhs, bindings, types) != BuiltinType.Int) {
@@ -278,8 +267,8 @@ object Typer {
         thenType
       case expr @ LetExpr(name, value, body, span) =>
         val varType = resolveExprType(value, bindings, types)
-        val newBindings =
-          bindings.withVar(name.value, VarDef.Let(expr, varType))
+        val newBindings = bindings
+          .withVar(name.value, VarDef.Let(expr, varType))
         val bodyType = resolveExprType(body, newBindings, types)
         types.put(expr, bodyType)
         bodyType
@@ -287,26 +276,18 @@ object Typer {
         val objType = resolveExprType(obj, bindings, types) match {
           case td: TypeDef => td
           case BuiltinType.Str =>
-            throw new CompileError(
-              "Can't match against strings",
-              expr.span
-            )
+            throw new CompileError("Can't match against strings", expr.span)
           case BuiltinType.Int =>
             throw new CompileError("Can't match against ints", expr.span)
         }
         // TODO this doesn't check that all variants are covered
-        val armTypes = arms.map {
-          case MatchArm(
-                pat,
-                body,
-                span
-              ) =>
-            val armType = resolveExprType(
-              body,
-              bindings.enterPattern(matchExpr, pat, objType),
-              types
-            )
-            (armType, span)
+        val armTypes = arms.map { case MatchArm(pat, body, span) =>
+          val armType = resolveExprType(
+            body,
+            bindings.enterPattern(matchExpr, pat, objType),
+            types
+          )
+          (armType, span)
         }
 
         val (firstArmType, _) = armTypes.head

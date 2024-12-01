@@ -16,25 +16,21 @@ case class Cycles(
 object Cycles {
   def fromFile(file: ParsedFile): Cycles = {
     val sccs = findSCCs(file)
-    val sccMap = sccs.zipWithIndex.flatMap { (types, i) =>
-      types.map(_ -> i)
-    }.toMap
+    val sccMap = sccs.zipWithIndex.flatMap { (types, i) => types.map(_ -> i) }
+      .toMap
 
     given bindings: Bindings = Bindings.fromFile(file)
-    val badSCCs = sccs.zipWithIndex
-      .filter { (scc, _) =>
-        scc.exists { typ =>
-          val fields = typ.cases.flatMap(_.fields)
-          fields.exists { field =>
-            bindings.getType(field.typ) match {
-              case neighbor: TypeDef =>
-                field.mutable && scc(neighbor)
-              case _ => false
-            }
+    val badSCCs = sccs.zipWithIndex.filter { (scc, _) =>
+      scc.exists { typ =>
+        val fields = typ.cases.flatMap(_.fields)
+        fields.exists { field =>
+          bindings.getType(field.typ) match {
+            case neighbor: TypeDef => field.mutable && scc(neighbor)
+            case _                 => false
           }
         }
       }
-      .map(_._2)
+    }.map(_._2)
 
     Cycles(sccs, sccMap, badSCCs.toSet)
   }
@@ -89,9 +85,7 @@ object Cycles {
     }
 
     for (typ <- file.typeDefs) {
-      if (!indexOf.contains(typ)) {
-        strongConnect(typ)
-      }
+      if (!indexOf.contains(typ)) { strongConnect(typ) }
     }
 
     sccs.toList.reverse
@@ -101,6 +95,5 @@ object Cycles {
       typ: TypeDef
   )(using bindings: Bindings): List[TypeDef] = typ.cases
     .flatMap(_.fields.map(field => bindings.getType(field.typ)))
-    .collect { case td: TypeDef => td }
-    .distinct
+    .collect { case td: TypeDef => td }.distinct
 }

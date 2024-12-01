@@ -36,7 +36,11 @@ case class TypeDef(
   }
 }
 
-case class EnumCase(name: Spanned[String], fields: Iterable[FieldDef], span: Span)
+case class EnumCase(
+    name: Spanned[String],
+    fields: Iterable[FieldDef],
+    span: Span
+)
 
 case class FieldDef(
     mutable: Boolean,

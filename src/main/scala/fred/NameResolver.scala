@@ -2,8 +2,7 @@ package fred
 
 object NameResolver {
 
-  /** Find [[TypeRef]]s that didn't resolve to anything
-    */
+  /** Find [[TypeRef]]s that didn't resolve to anything */
   def checkTypes(file: ParsedFile): List[TypeRef] = {
     val fieldTypes = file.typeDefs.flatMap(_.cases.flatMap(_.fields.map(_.typ)))
     val fnTypes = file.fns.flatMap { fn =>

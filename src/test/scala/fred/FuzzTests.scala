@@ -32,7 +32,7 @@ class FuzzTests
       sccs = Cycles.fromFile(ParsedFile(allTypes, Nil)).sccs
       allVars <- GenUtil.genVars(sccs, size / numTypes)
       assignExprs <- GenUtil.genAssignments(
-        allTypes.filterNot(_.name.startsWith("Opt")),
+        allTypes,
         allVars.view.mapValues(_.keySet).toMap
       )
     } yield {

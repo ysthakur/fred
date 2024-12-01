@@ -9,9 +9,8 @@ object Compiler {
   def compile(code: String, outExe: String): Unit = {
     val parsedFile = Parser.parse(code)
     given typer: Typer =
-      try {
-        Typer.resolveAllTypes(parsedFile)
-      } catch {
+      try { Typer.resolveAllTypes(parsedFile) }
+      catch {
         case CompileError(msg, span) =>
           println(s"Error at $span: $msg")
           println(code.substring(span.start, span.end))
@@ -28,12 +27,8 @@ object Compiler {
         in.write(generated.getBytes())
         in.close()
       },
-      out => {
-        print(String(out.readAllBytes()))
-      },
-      err => {
-        System.err.print(String(err.readAllBytes()))
-      }
+      out => { print(String(out.readAllBytes())) },
+      err => { System.err.print(String(err.readAllBytes())) }
     )
 
     assert(
@@ -43,8 +38,8 @@ object Compiler {
 
   /** Path to the folder with header files to include */
   private def includesFolder(): String = {
-    val runtimeFile =
-      this.getClass().getClassLoader().getResource(RuntimeHeader).toURI()
+    val runtimeFile = this.getClass().getClassLoader()
+      .getResource(RuntimeHeader).toURI()
     Paths.get(runtimeFile).getParent().toString()
   }
 }

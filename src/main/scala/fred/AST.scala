@@ -2,8 +2,7 @@ package fred
 
 case class Span(start: Int, end: Int) {
   override def toString =
-    if (start == -1 && end == -1) "(:)"
-    else s"($start:$end)"
+    if (start == -1 && end == -1) "(:)" else s"($start:$end)"
 }
 
 object Span {
@@ -153,10 +152,9 @@ enum VarDef {
 
   def typ: Type
 
-  def name: String =
-    this match {
-      case Let(expr, _)             => expr.name.value
-      case VarDef.Param(param, _)   => param.name.value
-      case Pat(_, _, _, varName, _) => varName
-    }
+  def name: String = this match {
+    case Let(expr, _)             => expr.name.value
+    case VarDef.Param(param, _)   => param.name.value
+    case Pat(_, _, _, varName, _) => varName
+  }
 }
