@@ -6,11 +6,11 @@ ParsedFile(
       params = List(),
       returnType = TypeRef(name = "int", span = Span(start = 17, end = 20)),
       body = IfExpr(
-        cond = VarRef(name = "foo", typ = None, span = Span(start = 34, end = 37)),
+        cond = VarRef(name = "foo", span = Span(start = 34, end = 37)),
         thenBody = IfExpr(
-          cond = VarRef(name = "bar", typ = None, span = Span(start = 56, end = 59)),
-          thenBody = VarRef(name = "x", typ = None, span = Span(start = 65, end = 66)),
-          elseBody = VarRef(name = "y", typ = None, span = Span(start = 72, end = 73)),
+          cond = VarRef(name = "bar", span = Span(start = 56, end = 59)),
+          thenBody = VarRef(name = "x", span = Span(start = 65, end = 66)),
+          elseBody = VarRef(name = "y", span = Span(start = 72, end = 73)),
           span = Span(start = 53, end = 82)
         ),
         elseBody = IfExpr(
@@ -41,7 +41,7 @@ ParsedFile(
               span = Span(start = 172, end = 177)
             ),
             op = Spanned(value = Seq, span = Span(start = 177, end = 178)),
-            rhs = VarRef(name = "bar", typ = None, span = Span(start = 191, end = 194)),
+            rhs = VarRef(name = "bar", span = Span(start = 191, end = 194)),
             typ = None
           ),
           span = Span(start = 97, end = 201)

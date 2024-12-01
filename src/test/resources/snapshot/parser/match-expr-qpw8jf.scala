@@ -8,7 +8,7 @@ ParsedFile(
       body = MatchExpr(
         obj = MatchExpr(
           obj = BinExpr(
-            lhs = VarRef(name = "foo", typ = None, span = Span(start = 31, end = 34)),
+            lhs = VarRef(name = "foo", span = Span(start = 31, end = 34)),
             op = Spanned(value = Plus, span = Span(start = 35, end = 36)),
             rhs = IntLiteral(value = 2, span = Span(start = 37, end = 38)),
             typ = None
@@ -41,7 +41,7 @@ ParsedFile(
                 ctorName = Spanned(value = "Bar", span = Span(start = 96, end = 99)),
                 bindings = List()
               ),
-              body = VarRef(name = "empty", typ = None, span = Span(start = 107, end = 112)),
+              body = VarRef(name = "empty", span = Span(start = 107, end = 112)),
               span = Span(start = 96, end = 112)
             ),
             MatchArm(
@@ -56,7 +56,7 @@ ParsedFile(
               ),
               body = FnCall(
                 fnName = Spanned(value = "single", span = Span(start = 142, end = 148)),
-                args = List(VarRef(name = "thing", typ = None, span = Span(start = 149, end = 154))),
+                args = List(VarRef(name = "thing", span = Span(start = 149, end = 154))),
                 resolvedFn = None,
                 typ = None,
                 span = Span(start = 142, end = 155)
@@ -74,7 +74,7 @@ ParsedFile(
             ),
             body = FnCall(
               fnName = Spanned(value = "just", span = Span(start = 204, end = 208)),
-              args = List(VarRef(name = "because", typ = None, span = Span(start = 209, end = 216))),
+              args = List(VarRef(name = "because", span = Span(start = 209, end = 216))),
               resolvedFn = None,
               typ = None,
               span = Span(start = 204, end = 217)

@@ -62,7 +62,9 @@ case class StringLiteral(value: String, span: Span) extends Expr {
 
 sealed trait LHSExpr extends Expr
 
-case class VarRef(name: String, typ: Option[Type], span: Span) extends LHSExpr
+case class VarRef(name: String, span: Span) extends LHSExpr {
+  override def typ: Option[Type] = None
+}
 
 case class FieldAccess(obj: Expr, field: Spanned[String], typ: Option[Type])
     extends LHSExpr {

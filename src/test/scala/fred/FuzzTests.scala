@@ -38,7 +38,7 @@ class FuzzTests
                 case Some(vars) =>
                   Gen
                     .oneOf(vars.keySet)
-                    .map(field.name -> VarRef(_, None, Span.synth))
+                    .map(field.name -> VarRef(_, Span.synth))
                 case None =>
                   Gen.const(
                     field.name -> CtorCall(
@@ -90,7 +90,7 @@ class FuzzTests
                         List(
                           (
                             Spanned(GenerateTypes.SomeField, Span.synth),
-                            VarRef(ref, None, Span.synth)
+                            VarRef(ref, Span.synth)
                           )
                         ),
                         Span.synth

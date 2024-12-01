@@ -503,7 +503,7 @@ object Translator {
         case IntLiteral(value, _) => ("", value.toString, "")
         case StringLiteral(value, _) =>
           ("", s"\"${value.replace("\"", "\\\"")}\"", "")
-        case VarRef(name, _, _) =>
+        case VarRef(name, _) =>
           ("", mangledVars.getOrElse(bindings.vars(name), name), "")
         case SetFieldExpr(obj, field, value, span) =>
           val (valSetup, valTranslated, valTeardown) = exprToC(value)

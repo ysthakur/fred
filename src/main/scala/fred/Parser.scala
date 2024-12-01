@@ -101,7 +101,7 @@ object Parser {
           .? ~ P.index)
         .map {
           case (start -> name -> None -> end) =>
-            VarRef(name, None, Span(start, start + name.length))
+            VarRef(name, Span(start, start + name.length))
           case (start -> name -> Some(Right(args)) -> end) =>
             FnCall(
               Spanned(name, Span(start, start + name.length)),

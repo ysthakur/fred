@@ -21,11 +21,11 @@ ParsedFile(
           lhs = FnCall(
             fnName = Spanned(value = "foo", span = Span(start = 79, end = 82)),
             args = List(
-              VarRef(name = "bleh", typ = None, span = Span(start = 83, end = 87)),
+              VarRef(name = "bleh", span = Span(start = 83, end = 87)),
               BinExpr(
                 lhs = IntLiteral(value = 4, span = Span(start = 89, end = 90)),
                 op = Spanned(value = Plus, span = Span(start = 91, end = 92)),
-                rhs = VarRef(name = "x", typ = None, span = Span(start = 93, end = 94)),
+                rhs = VarRef(name = "x", span = Span(start = 93, end = 94)),
                 typ = None
               )
             ),
@@ -34,7 +34,7 @@ ParsedFile(
             span = Span(start = 79, end = 95)
           ),
           op = Spanned(value = Seq, span = Span(start = 95, end = 96)),
-          rhs = VarRef(name = "x", typ = None, span = Span(start = 105, end = 106)),
+          rhs = VarRef(name = "x", span = Span(start = 105, end = 106)),
           typ = None
         ),
         span = Span(start = 58, end = 79)

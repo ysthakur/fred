@@ -13,7 +13,7 @@ ParsedFile(
           span = Span(start = 16, end = 29)
         ),
         op = Spanned(value = Seq, span = Span(start = 29, end = 30)),
-        rhs = VarRef(name = "foo", typ = None, span = Span(start = 31, end = 34)),
+        rhs = VarRef(name = "foo", span = Span(start = 31, end = 34)),
         typ = None
       ),
       span = Span(start = 0, end = 34)

@@ -5,7 +5,7 @@ List(
       value = IntLiteral(value = 2, span = Span(start = 225, end = 226)),
       body = BinExpr(
         lhs = MatchExpr(
-          obj = VarRef(name = "param", typ = None, span = Span(start = 238, end = 243)),
+          obj = VarRef(name = "param", span = Span(start = 238, end = 243)),
           arms = List(
             MatchArm(
               pat = MatchPattern(
@@ -17,7 +17,7 @@ List(
                   )
                 )
               ),
-              body = VarRef(name = "blech", typ = None, span = Span(start = 284, end = 289)),
+              body = VarRef(name = "blech", span = Span(start = 284, end = 289)),
               span = Span(start = 262, end = 289)
             ),
             MatchArm(
@@ -30,14 +30,14 @@ List(
                   )
                 )
               ),
-              body = VarRef(name = "param", typ = None, span = Span(start = 325, end = 330)),
+              body = VarRef(name = "param", span = Span(start = 325, end = 330)),
               span = Span(start = 301, end = 339)
             )
           ),
           armsSpan = Span(start = 244, end = 340)
         ),
         op = Spanned(value = Seq, span = Span(start = 340, end = 341)),
-        rhs = VarRef(name = "x", typ = None, span = Span(start = 350, end = 351)),
+        rhs = VarRef(name = "x", span = Span(start = 350, end = 351)),
         typ = None
       ),
       span = Span(start = 217, end = 238)
@@ -46,7 +46,7 @@ List(
   ),
   (IntLiteral(value = 2, span = Span(start = 225, end = 226)), Int),
   (
-    VarRef(name = "param", typ = None, span = Span(start = 238, end = 243)),
+    VarRef(name = "param", span = Span(start = 238, end = 243)),
     TypeDef(
       nameSpanned = Spanned(value = "Foo", span = Span(start = 12, end = 15)),
       cases = List(
@@ -92,7 +92,7 @@ List(
   ),
   (
     MatchExpr(
-      obj = VarRef(name = "param", typ = None, span = Span(start = 238, end = 243)),
+      obj = VarRef(name = "param", span = Span(start = 238, end = 243)),
       arms = List(
         MatchArm(
           pat = MatchPattern(
@@ -104,7 +104,7 @@ List(
               )
             )
           ),
-          body = VarRef(name = "blech", typ = None, span = Span(start = 284, end = 289)),
+          body = VarRef(name = "blech", span = Span(start = 284, end = 289)),
           span = Span(start = 262, end = 289)
         ),
         MatchArm(
@@ -117,7 +117,7 @@ List(
               )
             )
           ),
-          body = VarRef(name = "param", typ = None, span = Span(start = 325, end = 330)),
+          body = VarRef(name = "param", span = Span(start = 325, end = 330)),
           span = Span(start = 301, end = 339)
         )
       ),
@@ -169,7 +169,7 @@ List(
   (
     BinExpr(
       lhs = MatchExpr(
-        obj = VarRef(name = "param", typ = None, span = Span(start = 238, end = 243)),
+        obj = VarRef(name = "param", span = Span(start = 238, end = 243)),
         arms = List(
           MatchArm(
             pat = MatchPattern(
@@ -181,7 +181,7 @@ List(
                 )
               )
             ),
-            body = VarRef(name = "blech", typ = None, span = Span(start = 284, end = 289)),
+            body = VarRef(name = "blech", span = Span(start = 284, end = 289)),
             span = Span(start = 262, end = 289)
           ),
           MatchArm(
@@ -194,20 +194,20 @@ List(
                 )
               )
             ),
-            body = VarRef(name = "param", typ = None, span = Span(start = 325, end = 330)),
+            body = VarRef(name = "param", span = Span(start = 325, end = 330)),
             span = Span(start = 301, end = 339)
           )
         ),
         armsSpan = Span(start = 244, end = 340)
       ),
       op = Spanned(value = Seq, span = Span(start = 340, end = 341)),
-      rhs = VarRef(name = "x", typ = None, span = Span(start = 350, end = 351)),
+      rhs = VarRef(name = "x", span = Span(start = 350, end = 351)),
       typ = None
     ),
     Int
   ),
   (
-    VarRef(name = "blech", typ = None, span = Span(start = 284, end = 289)),
+    VarRef(name = "blech", span = Span(start = 284, end = 289)),
     TypeDef(
       nameSpanned = Spanned(value = "Foo", span = Span(start = 12, end = 15)),
       cases = List(
@@ -252,7 +252,7 @@ List(
     )
   ),
   (
-    VarRef(name = "param", typ = None, span = Span(start = 325, end = 330)),
+    VarRef(name = "param", span = Span(start = 325, end = 330)),
     TypeDef(
       nameSpanned = Spanned(value = "Foo", span = Span(start = 12, end = 15)),
       cases = List(
@@ -296,5 +296,5 @@ List(
       span = Span(start = 7, end = 183)
     )
   ),
-  (VarRef(name = "x", typ = None, span = Span(start = 350, end = 351)), Int)
+  (VarRef(name = "x", span = Span(start = 350, end = 351)), Int)
 )

@@ -118,13 +118,13 @@ object Typer {
       case StringLiteral(_, _) =>
         types.put(expr, BuiltinType.Str)
         BuiltinType.Str
-      case varRef @ VarRef(_, _, _) =>
+      case varRef @ VarRef(_, _) =>
         val typ = bindings.getVar(varRef).typ
         types.put(expr, typ)
         typ
       case SetFieldExpr(obj, field, value, span) =>
         val objType =
-          bindings.getVar(VarRef(obj.value, None, obj.span)).typ match {
+          bindings.getVar(VarRef(obj.value, obj.span)).typ match {
             case td: TypeDef => td
             case builtinType =>
               throw new CompileError(
