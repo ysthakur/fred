@@ -2,11 +2,59 @@ package fred
 
 import scala.sys.process.*
 import java.nio.file.Paths
+import java.io.File
+
+import scopt.OParser
 
 object Compiler {
   private val RuntimeHeader = "runtime/runtime.h"
 
-  def compile(code: String, outExe: String): Unit = {
+  case class Settings(
+      translatorSettings: Translator.Settings = Translator.Settings()
+  )
+
+  def main(args: Array[String]): Unit = {
+    case class Options(
+        inFile: Option[File] = None,
+        outExe: Option[String] = None,
+        rcAlgo: Translator.RcAlgo = Translator.RcAlgo.Mine
+    )
+
+    val builder = OParser.builder[Options]
+    val parser = {
+      import builder._
+      OParser.sequence(
+        programName("fred"),
+        arg[File]("file").action((f, opts) => opts.copy(inFile = Some(f)))
+          .text("Input file"),
+        opt[String]('o', "out").action((f, opts) => opts.copy(outExe = Some(f)))
+          .text("Output executable"),
+        opt[Unit]("lazy-mark-scan-only").action((_, opts) =>
+          opts.copy(rcAlgo = Translator.RcAlgo.LazyMarkScan)
+        ).text("Use base lazy mark scan algorithm instead of my cool one :(")
+      )
+    }
+    OParser.parse(parser, args, Options()) match {
+      case Some(opts) =>
+        val codeSource = io.Source.fromFile(opts.inFile.get)
+        val code =
+          try { codeSource.mkString }
+          finally { codeSource.close() }
+        Compiler.compile(
+          code,
+          opts.outExe.get,
+          settings =
+            Settings(translatorSettings = Translator.Settings(opts.rcAlgo))
+        )
+      case None =>
+    }
+  }
+
+  def compile(
+      code: String,
+      outExe: String,
+      settings: Settings = Settings()
+  ): Unit = {
     val parsedFile = Parser.parse(code)
     given typer: Typer =
       try { Typer.resolveAllTypes(parsedFile) }
@@ -17,7 +65,8 @@ object Compiler {
           System.exit(1)
           throw new AssertionError("Shouldn't get here")
       }
-    val generatedC = Translator.toC(parsedFile)
+    val generatedC = Translator
+      .toC(parsedFile, settings = settings.translatorSettings)
     invokeGCC(generatedC, outExe)
   }
 

@@ -7,7 +7,15 @@ object Translator {
 
   private val NoMangleFns = Set("main", "printf")
 
-  def toC(file: ParsedFile)(using typer: Typer): String = {
+  case class Settings(algo: RcAlgo = RcAlgo.Mine)
+
+  enum RcAlgo {
+    case LazyMarkScan, Mine
+  }
+
+  def toC(file: ParsedFile, settings: Settings = Settings())(using
+      typer: Typer
+  ): String = {
     given Bindings = Bindings.fromFile(file)
     given cycles: Cycles = Cycles.fromFile(file)
     val helper = Helper(typer)

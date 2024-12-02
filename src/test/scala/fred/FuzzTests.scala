@@ -20,7 +20,7 @@ class FuzzTests
     }
   }
 
-  property("Generated programs", Slow) {
+  property("No intermediate checks", Slow) {
     given PropertyCheckConfiguration =
       PropertyCheckConfiguration(minSize = 1, sizeRange = 30)
 
