@@ -17,7 +17,16 @@ object Translator {
       typer: Typer
   ): String = {
     given Bindings = Bindings.fromFile(file)
-    given cycles: Cycles = Cycles.fromFile(file)
+    given cycles: Cycles = settings.algo match {
+      case RcAlgo.LazyMarkScan =>
+        // For lazy mark scan, put every type in the same SCC
+        Cycles(
+          List(file.typeDefs.toSet),
+          file.typeDefs.map(_ -> 0).toMap,
+          Set.empty
+        )
+      case RcAlgo.Mine => Cycles.fromFile(file)
+    }
     val helper = Helper(typer)
     val (genDecls, genImpls) =
       List(Freer, Decrementer, MarkGray, Scan, ScanBlack, CollectWhite, Printer)

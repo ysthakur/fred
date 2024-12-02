@@ -71,6 +71,32 @@ class ExecTests extends AnyFunSuite, SnapshotAssertions {
     valgrindCheck(code, "basic-cycle.c")("3")
   }
 
+  test("Lazy mark scan only") {
+    // These types should all be lumped into the same SCC
+    val parsed = Parser.parse("""
+      data FooList
+        = FooCons {
+            foo: Foo,
+            tail: FooList
+          }
+        | FooNil {}
+      data Foo = Foo { bar: Bar }
+      data Bar = Bar {}
+
+      fn main(): int =
+        let bar = Bar {} in
+        let foo = Foo { bar: bar } in
+        let foos = FooCons { foo: foo, tail: FooNil {} } in
+        0
+      """)
+    given Typer = Typer.resolveAllTypes(parsed)
+    val generated = Translator.toC(
+      parsed,
+      settings = Translator.Settings(Translator.RcAlgo.LazyMarkScan)
+    )
+    assertFileSnapshot(generated.toString, "exec/lazy-mark-scan-83wesh.c")
+  }
+
   test("Needs sorting") {
     // This test case needs the objects to be sorted by SCC. Otherwise, the quadratic
     // scanning problem will show up
