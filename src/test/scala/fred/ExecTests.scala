@@ -11,11 +11,16 @@ import snapshot4s.generated.snapshotConfig
 import fred.Compiler.Settings
 
 class ExecTests extends AnyFunSuite, SnapshotAssertions {
-  def valgrindCheck(code: String, outFile: String)(expected: String): Unit = {
+  def valgrindCheck(
+      code: String,
+      outFile: String,
+      settings: Settings = Settings()
+  )(expected: String): Unit = {
     ExecTests.valgrindCheck(
       Parser.parse(code),
       Some(assertFileSnapshot(_, s"exec/$outFile")),
-      Some(expected)
+      Some(expected),
+      settings = settings
     )
   }
 
@@ -75,7 +80,7 @@ class ExecTests extends AnyFunSuite, SnapshotAssertions {
 
   test("Lazy mark scan only") {
     // These types should all be lumped into the same SCC
-    val parsed = Parser.parse("""
+    val code = """
       data FooList
         = FooCons {
             foo: Foo,
@@ -90,11 +95,36 @@ class ExecTests extends AnyFunSuite, SnapshotAssertions {
         let foo = Foo { bar: bar } in
         let foos = FooCons { foo: foo, tail: FooNil {} } in
         0
-      """)
-    given Typer = Typer.resolveAllTypes(parsed)
-    val generated = Translator
-      .toC(parsed, settings = Settings(rcAlgo = Compiler.RcAlgo.LazyMarkScan))
-    assertFileSnapshot(generated.toString, "exec/lazy-mark-scan-83wesh.c")
+      """
+
+    valgrindCheck(
+      code,
+      "exec/lazy-mark-scan-83wesh.c",
+      settings = Settings(rcAlgo = Compiler.RcAlgo.LazyMarkScan)
+    )("")
+  }
+
+  test("PCR bucket emptied and refilled") {
+    // The bucket for SCC 0 (the only SCC) should be deleted after the call to
+    // processAllPCRs, then created again
+    val code = """
+      data Foo = Foo {
+        mut self: OptFoo
+      }
+      data OptFoo
+        = SomeFoo { value: Foo }
+        | NoneFoo {}
+
+      fn main(): int =
+        let v0 = Foo { self: NoneFoo {} } in
+        let v1 = Foo { self: NoneFoo {} } in
+        set v0.self SomeFoo { value: v1 };
+        set v0.self SomeFoo { value: v0 };
+        c("processAllPCRs();");
+        set v0.self SomeFoo { value: v1 };
+        0
+      """
+    valgrindCheck(code, "exec/bucket-empty-recreate-3jilws.c")("")
   }
 
   test("Needs sorting") {
@@ -159,7 +189,7 @@ object ExecTests {
       processC: String => String = c => c
   ): Unit = {
     given typer: Typer = Typer.resolveAllTypes(parsedFile)
-    val generatedC = processC(Translator.toC(parsedFile))
+    val generatedC = processC(Translator.toC(parsedFile, settings = settings))
 
     snapshot match {
       case Some(assertSnapshot) => assertSnapshot(generatedC)

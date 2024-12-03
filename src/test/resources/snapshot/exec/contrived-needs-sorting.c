@@ -810,7 +810,6 @@ int main() {
   file->exprs = new$ExprCons(expr, file->exprs);
   file->exprs->rc ++;
   $decr_ExprList(oldValue$1);
-  actualCtx->files;
   struct Context* oldValue$2 = ctx->ref;
   ctx->ref = new$Context(new$FileNil(), "other context");
   ctx->ref->rc ++;

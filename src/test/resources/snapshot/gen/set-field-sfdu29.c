@@ -111,7 +111,6 @@ int fn$bar(struct Foo* f) {
   f->field = 5;
   int oldValue$1 = f->field;
   f->field = 6;
-  f->field;
   int ret$2 = f->field;
   $decr_Foo(f);
   return ret$2;

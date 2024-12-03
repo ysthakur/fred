@@ -279,7 +279,6 @@ int main() {
   a->next = new$Some(b);
   a->next->rc ++;
   $decr_Option(oldValue$0);
-  a->next;
   printf("%d\n", a->value + b->value);
   int ret$1 = 0;
   $decr_List(b);

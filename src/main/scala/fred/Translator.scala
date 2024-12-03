@@ -513,8 +513,9 @@ object Translator {
               case td: TypeDef if !lhs.isInstanceOf[SetFieldExpr] =>
                 s"drop((void *) $lhsTranslated, (void *) ${Decrementer.name(td)});"
               case _ => lhs match {
-                  case _: SetFieldExpr => ""
-                  case _               => s"$lhsTranslated;"
+                  case _: SetFieldExpr                          => ""
+                  case call: FnCall if call.fnName.value == "c" => ""
+                  case _ => s"$lhsTranslated;"
                 }
             }
             (s"$setup\n$execLhs", rhsTranslated, teardown)
