@@ -10,14 +10,19 @@ object Compiler {
   private val RuntimeHeader = "runtime/runtime.h"
 
   case class Settings(
-      translatorSettings: Translator.Settings = Translator.Settings()
+      rcAlgo: RcAlgo = RcAlgo.Mine,
+      includeMemcheck: Boolean = false
   )
+
+  enum RcAlgo {
+    case LazyMarkScan, Mine
+  }
 
   def main(args: Array[String]): Unit = {
     case class Options(
         inFile: Option[File] = None,
         outExe: Option[String] = None,
-        rcAlgo: Translator.RcAlgo = Translator.RcAlgo.Mine
+        settings: Settings = Settings()
     )
 
     val builder = OParser.builder[Options]
@@ -30,7 +35,7 @@ object Compiler {
         opt[String]('o', "out").action((f, opts) => opts.copy(outExe = Some(f)))
           .text("Output executable"),
         opt[Unit]("lazy-mark-scan-only").action((_, opts) =>
-          opts.copy(rcAlgo = Translator.RcAlgo.LazyMarkScan)
+          opts.copy(settings = opts.settings.copy(rcAlgo = RcAlgo.LazyMarkScan))
         ).text("Use base lazy mark scan algorithm instead of my cool one :(")
       )
     }
@@ -38,14 +43,9 @@ object Compiler {
       case Some(opts) =>
         val codeSource = io.Source.fromFile(opts.inFile.get)
         val code =
-          try { codeSource.mkString }
-          finally { codeSource.close() }
-        Compiler.compile(
-          code,
-          opts.outExe.get,
-          settings =
-            Settings(translatorSettings = Translator.Settings(opts.rcAlgo))
-        )
+          try codeSource.mkString
+          finally codeSource.close()
+        Compiler.compile(code, opts.outExe.get, settings = opts.settings)
       case None =>
     }
   }
@@ -57,7 +57,7 @@ object Compiler {
   ): Unit = {
     val parsedFile = Parser.parse(code)
     given typer: Typer =
-      try { Typer.resolveAllTypes(parsedFile) }
+      try Typer.resolveAllTypes(parsedFile)
       catch {
         case CompileError(msg, span) =>
           println(s"Error at $span: $msg")
@@ -65,23 +65,26 @@ object Compiler {
           System.exit(1)
           throw new AssertionError("Shouldn't get here")
       }
-    val generatedC = Translator
-      .toC(parsedFile, settings = settings.translatorSettings)
-    invokeGCC(generatedC, outExe)
+    val generatedC = Translator.toC(parsedFile, settings = settings)
+    invokeGCC(generatedC, outExe, settings)
   }
 
-  def invokeGCC(generated: String, outExe: String): Unit = {
+  def invokeGCC(generated: String, outExe: String, settings: Settings): Unit = {
     val io = ProcessIO(
       in => {
         in.write(generated.getBytes())
         in.close()
       },
-      out => { print(String(out.readAllBytes())) },
-      err => { System.err.print(String(err.readAllBytes())) }
+      out => print(String(out.readAllBytes())),
+      err => System.err.print(String(err.readAllBytes()))
     )
 
+    val extraIncludes =
+      if (settings.includeMemcheck) "-I /usr/include/valgrind" else ""
+
     assert(
-      s"gcc -I ${includesFolder()} -o $outExe -x c -".run(io).exitValue() == 0
+      s"gcc -I ${includesFolder()} $extraIncludes -o $outExe -x c -".run(io)
+        .exitValue() == 0
     )
   }
 

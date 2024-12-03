@@ -8,6 +8,8 @@ import org.scalatest.funsuite.AnyFunSuite
 import snapshot4s.scalatest.SnapshotAssertions
 import snapshot4s.generated.snapshotConfig
 
+import fred.Compiler.Settings
+
 class ExecTests extends AnyFunSuite, SnapshotAssertions {
   def valgrindCheck(code: String, outFile: String)(expected: String): Unit = {
     ExecTests.valgrindCheck(
@@ -90,10 +92,8 @@ class ExecTests extends AnyFunSuite, SnapshotAssertions {
         0
       """)
     given Typer = Typer.resolveAllTypes(parsed)
-    val generated = Translator.toC(
-      parsed,
-      settings = Translator.Settings(Translator.RcAlgo.LazyMarkScan)
-    )
+    val generated = Translator
+      .toC(parsed, settings = Settings(rcAlgo = Compiler.RcAlgo.LazyMarkScan))
     assertFileSnapshot(generated.toString, "exec/lazy-mark-scan-83wesh.c")
   }
 
@@ -154,29 +154,31 @@ object ExecTests {
       parsedFile: ParsedFile,
       snapshot: Option[String => Unit],
       expected: Option[String],
-      print: Boolean = false
+      save: Option[String] = None,
+      settings: Settings = Settings(),
+      processC: String => String = c => c
   ): Unit = {
     given typer: Typer = Typer.resolveAllTypes(parsedFile)
-    val generatedC = Translator.toC(parsedFile)
+    val generatedC = processC(Translator.toC(parsedFile))
 
     snapshot match {
       case Some(assertSnapshot) => assertSnapshot(generatedC)
       case None                 =>
     }
 
-    if (print) {
-      Files.write(Path.of("foo.c"), generatedC.getBytes())
+    save match {
+      case Some(savePath) => Files
+          .write(Path.of(savePath), generatedC.getBytes())
+      case None =>
     }
 
-    Compiler.invokeGCC(generatedC, "a.out")
+    Compiler.invokeGCC(generatedC, "a.out", settings)
 
     val stderrBuf = StringBuilder()
     val stdout =
       try {
-        "valgrind --leak-check=full --show-leak-kinds=all -s ./a.out" !! ProcessLogger(
-          _ => {},
-          err => stderrBuf.append('\n').append(err)
-        )
+        "valgrind --leak-check=full --show-leak-kinds=all -s ./a.out" !!
+          ProcessLogger(_ => {}, err => stderrBuf.append('\n').append(err))
       } catch {
         case e: RuntimeException =>
           throw RuntimeException(stderrBuf.toString, e)

@@ -199,6 +199,18 @@ object Typer {
               }
               types.put(expr, BuiltinType.Int)
               BuiltinType.Int
+            } else if (name == "c") {
+              if (args.size != 1) {
+                throw new CompileError("c needs exactly one argument", span)
+              }
+              if (!args.head.isInstanceOf[StringLiteral]) {
+                throw new CompileError(
+                  "c needs a string literal",
+                  args.head.span
+                )
+              }
+              types.put(expr, BuiltinType.Int)
+              BuiltinType.Int
             } else {
               throw new CompileError(s"No such function: $name", nameSpan)
             }

@@ -152,10 +152,10 @@ object GenUtil {
   def genAssignments(
       allTypes: List[TypeDef],
       vars: Map[String, Set[String]]
-  ): Gen[List[Expr]] = {
+  ): Gen[List[SetFieldExpr]] = {
     val types = allTypes.filterNot(_.name.startsWith("Opt"))
 
-    def helper(typ: TypeDef): Gen[List[Expr]] = {
+    def helper(typ: TypeDef): Gen[List[SetFieldExpr]] = {
       val currVars = vars(typ.name)
       GenUtil
         .sequence(

@@ -2,25 +2,27 @@ package fred
 
 import scala.collection.mutable
 
+import fred.Compiler.RcAlgo
+import fred.Compiler.Settings
+
 object Translator {
   private val This = "this"
 
   private val NoMangleFns = Set("main", "printf")
 
-  case class Settings(algo: RcAlgo = RcAlgo.Mine)
-
-  enum RcAlgo {
-    case LazyMarkScan, Mine
-  }
-
+  /** @param file
+    * @param rcAlgo
+    *   The cyclic reference counting algorithm to use. With
+    *   [[RcAlgo.LazyMarkScan]], everything gets put into the same SCC
+    * @param typer
+    * @return
+    */
   def toC(file: ParsedFile, settings: Settings = Settings())(using
       typer: Typer
   ): String = {
     given Bindings = Bindings.fromFile(file)
-    given cycles: Cycles = settings.algo match {
-      case RcAlgo.LazyMarkScan =>
-        // For lazy mark scan, put every type in the same SCC
-        Cycles(
+    given cycles: Cycles = settings.rcAlgo match {
+      case RcAlgo.LazyMarkScan => Cycles(
           List(file.typeDefs.toSet),
           file.typeDefs.map(_ -> 0).toMap,
           Set.empty
@@ -45,8 +47,10 @@ object Translator {
       ctorDecls.mkString("", "\n", "\n") + fnDecls.mkString("", "\n", "\n") +
       genImpls.mkString("", "\n", "\n") + ctorImpls.mkString("", "\n", "\n") +
       fnImpls.mkString("", "\n", "\n")
-    "#include \"runtime.h\"\n\n" + generated.replaceAll(raw"\n(\s|\n)*\n", "\n")
-      .strip() + "\n"
+    val extraIncludes =
+      if (settings.includeMemcheck) "#include \"memcheck.h\"\n" else ""
+    extraIncludes + "#include \"runtime.h\"\n\n" +
+      generated.replaceAll(raw"\n(\s|\n)*\n", "\n").strip() + "\n"
   }
 
   private trait GeneratedFn(unmangledName: String) {
@@ -508,7 +512,10 @@ object Translator {
             val execLhs = typer.types(lhs) match {
               case td: TypeDef if !lhs.isInstanceOf[SetFieldExpr] =>
                 s"drop((void *) $lhsTranslated, (void *) ${Decrementer.name(td)});"
-              case _ => s"$lhsTranslated;"
+              case _ => lhs match {
+                  case _: SetFieldExpr => ""
+                  case _               => s"$lhsTranslated;"
+                }
             }
             (s"$setup\n$execLhs", rhsTranslated, teardown)
           } else {
@@ -557,12 +564,16 @@ object Translator {
           val (objSetup, objToC, objTeardown) = exprToC(obj)
           (objSetup, s"$objToC->${field.value}", objTeardown)
         case FnCall(fnName, args, _, _, _) =>
-          val (setups, argsToC, teardowns) = args.map(exprToC).unzip3
-          (
-            setups.mkString("\n"),
-            s"${mangleFnName(fnName.value)}(${argsToC.mkString(", ")})",
-            teardowns.mkString("\n")
-          )
+          if (fnName.value == "c") {
+            (args.head.asInstanceOf[StringLiteral].value, "0", "")
+          } else {
+            val (setups, argsToC, teardowns) = args.map(exprToC).unzip3
+            (
+              setups.mkString("\n"),
+              s"${mangleFnName(fnName.value)}(${argsToC.mkString(", ")})",
+              teardowns.mkString("\n")
+            )
+          }
         case CtorCall(ctorNameSpanned, values, span) =>
           val (typ, variant) = bindings.ctors(ctorNameSpanned.value)
           val (setups, args, teardowns) = values.toSeq
