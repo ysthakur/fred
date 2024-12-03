@@ -99,7 +99,7 @@ class ExecTests extends AnyFunSuite, SnapshotAssertions {
 
     valgrindCheck(
       code,
-      "exec/lazy-mark-scan-83wesh.c",
+      "lazy-mark-scan-83wesh.c",
       settings = Settings(rcAlgo = Compiler.RcAlgo.LazyMarkScan)
     )("")
   }
@@ -124,7 +124,7 @@ class ExecTests extends AnyFunSuite, SnapshotAssertions {
         set v0.self SomeFoo { value: v1 };
         0
       """
-    valgrindCheck(code, "exec/bucket-empty-recreate-3jilws.c")("")
+    valgrindCheck(code, "bucket-empty-recreate-3jilws.c")("")
   }
 
   test("Needs sorting") {
