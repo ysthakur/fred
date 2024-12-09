@@ -23,6 +23,6 @@ jobs:
         distribution: 'temurin'
         cache: 'sbt'
     - name: Install sbt
-      run: apt install -y sbt
+      run: sudo apt install -y sbt
     - name: Run tests
       run: sbt test
