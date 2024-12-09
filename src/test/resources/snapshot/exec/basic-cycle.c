@@ -104,6 +104,7 @@ void $decr_List(struct List* this) {
 void $markGray_Option(struct Option* this) {
   if (this->color == kGray) return;
   this->color = kGray;
+  this->addedPCR = 0;
   switch (this->kind) {
   case None_tag:
     break;
@@ -116,6 +117,7 @@ void $markGray_Option(struct Option* this) {
 void $markGray_List(struct List* this) {
   if (this->color == kGray) return;
   this->color = kGray;
+  this->addedPCR = 0;
   switch (this->kind) {
   case List_tag:
     this->next->rc --;

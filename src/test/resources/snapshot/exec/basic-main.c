@@ -50,6 +50,7 @@ void $decr_List(struct List* this) {
 void $markGray_List(struct List* this) {
   if (this->color == kGray) return;
   this->color = kGray;
+  this->addedPCR = 0;
   switch (this->kind) {
   case Nil_tag:
     break;

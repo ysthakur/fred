@@ -125,7 +125,7 @@ void removePCR(Common *obj, int scc)
         free(bucket);
       }
       free(head);
-      break;
+      return;
     }
     else
     {

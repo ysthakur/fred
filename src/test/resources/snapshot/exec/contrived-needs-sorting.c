@@ -295,6 +295,7 @@ void $decr_Expr(struct Expr* this) {
 void $markGray_CtxRef(struct CtxRef* this) {
   if (this->color == kGray) return;
   this->color = kGray;
+  this->addedPCR = 0;
   switch (this->kind) {
   case CtxRef_tag:
     break;
@@ -303,6 +304,7 @@ void $markGray_CtxRef(struct CtxRef* this) {
 void $markGray_Context(struct Context* this) {
   if (this->color == kGray) return;
   this->color = kGray;
+  this->addedPCR = 0;
   switch (this->kind) {
   case Context_tag:
     this->files->rc --;
@@ -313,6 +315,7 @@ void $markGray_Context(struct Context* this) {
 void $markGray_FileList(struct FileList* this) {
   if (this->color == kGray) return;
   this->color = kGray;
+  this->addedPCR = 0;
   switch (this->kind) {
   case FileNil_tag:
     break;
@@ -327,6 +330,7 @@ void $markGray_FileList(struct FileList* this) {
 void $markGray_File(struct File* this) {
   if (this->color == kGray) return;
   this->color = kGray;
+  this->addedPCR = 0;
   switch (this->kind) {
   case File_tag:
     this->exprs->rc --;
@@ -337,6 +341,7 @@ void $markGray_File(struct File* this) {
 void $markGray_ExprList(struct ExprList* this) {
   if (this->color == kGray) return;
   this->color = kGray;
+  this->addedPCR = 0;
   switch (this->kind) {
   case ExprNil_tag:
     break;
@@ -351,6 +356,7 @@ void $markGray_ExprList(struct ExprList* this) {
 void $markGray_Expr(struct Expr* this) {
   if (this->color == kGray) return;
   this->color = kGray;
+  this->addedPCR = 0;
   switch (this->kind) {
   case Expr_tag:
     this->file->rc --;

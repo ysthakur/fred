@@ -128,6 +128,7 @@ void $decr_Bar(struct Bar* this) {
 void $markGray_FooList(struct FooList* this) {
   if (this->color == kGray) return;
   this->color = kGray;
+  this->addedPCR = 0;
   switch (this->kind) {
   case FooCons_tag:
     this->foo_FooCons->rc --;
@@ -142,6 +143,7 @@ void $markGray_FooList(struct FooList* this) {
 void $markGray_Foo(struct Foo* this) {
   if (this->color == kGray) return;
   this->color = kGray;
+  this->addedPCR = 0;
   switch (this->kind) {
   case Foo_tag:
     this->bar->rc --;
@@ -152,6 +154,7 @@ void $markGray_Foo(struct Foo* this) {
 void $markGray_Bar(struct Bar* this) {
   if (this->color == kGray) return;
   this->color = kGray;
+  this->addedPCR = 0;
   switch (this->kind) {
   case Bar_tag:
     break;

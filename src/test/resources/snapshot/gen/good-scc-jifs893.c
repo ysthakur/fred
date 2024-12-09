@@ -43,6 +43,7 @@ void $decr_Rec(struct Rec* this) {
 void $markGray_Rec(struct Rec* this) {
   if (this->color == kGray) return;
   this->color = kGray;
+  this->addedPCR = 0;
   switch (this->kind) {
   case Rec_tag:
     this->rec->rc --;

@@ -139,7 +139,7 @@ class FuzzTests
               FnCall(
                 Spanned("c", Span.synth),
                 List(StringLiteral(
-                  "processAllPCRs(); VALGRIND_DO_LEAK_CHECK;",
+                  "processAllPCRs(); VALGRIND_DO_CHANGED_LEAK_CHECK;",
                   Span.synth
                 )),
                 None,

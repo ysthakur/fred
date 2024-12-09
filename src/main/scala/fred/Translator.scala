@@ -158,6 +158,7 @@ object Translator {
 
       s"""|if ($This->color == kGray) return;
           |$This->color = kGray;
+          |$This->addedPCR = 0;
           |$recMarks""".stripMargin
     }
   }
