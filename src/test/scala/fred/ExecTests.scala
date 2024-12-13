@@ -215,8 +215,10 @@ object ExecTests {
       }
     val valgrindOut = stderrBuf.toString
     expected match {
-      case Some(expected) =>
-        assert(stdout.trim() == expected.trim(), valgrindOut)
+      case Some(expected) => assert(
+          stdout.trim() == expected.trim(),
+          s"Stdout: $stdout\n---\nStderr: $valgrindOut"
+        )
       case None =>
     }
     assert(valgrindOut.contains("ERROR SUMMARY: 0 errors"), valgrindOut)

@@ -5,6 +5,19 @@ import snapshot4s.scalatest.SnapshotAssertions
 import snapshot4s.generated.snapshotConfig
 
 class ParserTests extends AnyFunSuite with SnapshotAssertions {
+  test("Parsing comments") {
+    val parsed = Parser.parse("""
+      // This is a comment
+      fn foo(): str = // This is also a comment
+      // And this one
+        "this is // not a comment"
+      """)
+    assertFileSnapshot(
+      pprint.apply(parsed).plainText,
+      "parser/comment-p8u2ids.scala"
+    )
+  }
+
   test("Parsing a type") {
     val parsed = Parser.parse("""
       data Foo

@@ -15,7 +15,8 @@ object Parser {
   }
 
   private object ParserHelpers {
-    val ws: P0[Unit] = (sp | crlf | lf).rep0.void
+    val comment = (P.string("//") *> P.repUntil0(P.anyChar.void, crlf | lf)).void
+    val ws: P0[Unit] = (sp | crlf | lf | comment).rep0.void
 
     extension [A](p1: P[A])
       /** Like `~`, but allows whitespace in between */
