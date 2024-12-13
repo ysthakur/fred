@@ -81,11 +81,6 @@ object GenUtil {
     if (prog.stmts.isEmpty) Stream.empty
     else {
       Shrink.shrink(prog.stmts)(Shrink.shrinkContainer)
-      .map {
-        foo =>
-          println(s"Here ${foo.size}")
-          foo
-      }
         .map(stmts => prog.copy(stmts = stmts))
     }
   }
