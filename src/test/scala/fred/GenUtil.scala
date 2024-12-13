@@ -13,33 +13,24 @@ object GenUtil {
   /** A generated statement */
   enum GenStmt {
     case Assign(lhs: String, field: String, fieldType: String, rhs: String)
-
-    /** Decrement the reference count of some variable */
-    case DecrRc(name: String, typ: String)
     case ValgrindCheck
-  }
 
-  case class GeneratedProgram(
-      types: List[TypeDef],
-      vars: List[(String, Expr)],
-      stmts: List[GenStmt]
-  ) {
-    def asAst: ParsedFile = {
-      val finalRes = IntLiteral(0, Span.synth)
-      val stmts = this.stmts.map {
-        case GenStmt.Assign(lhs, field, fieldType, rhs) => expr
-        case GenStmt.DecrRc(name, typ) => FnCall(
-            Spanned("c", Span.synth),
-            List(
-              // Why the "; " at the start? So it's not matched by the regex that
-              // removes all the $decr_Type calls at the bottom of the main function
-              StringLiteral(s"; $$decr_$typ($name);", Span.synth)
+    def asAst: Expr = {
+      this match {
+        case Assign(lhs, field, fieldType, rhs) => SetFieldExpr(
+            Spanned(lhs, Span.synth),
+            Spanned(field, Span.synth),
+            CtorCall(
+              Spanned(s"Some$fieldType", Span.synth),
+              List((
+                Spanned(GenUtil.SomeField, Span.synth),
+                VarRef(rhs, Span.synth)
+              )),
+              Span.synth
             ),
-            None,
-            None,
             Span.synth
           )
-        case GenStmt.ValgrindCheck => FnCall(
+        case ValgrindCheck => FnCall(
             Spanned("c", Span.synth),
             List(StringLiteral(
               "processAllPCRs(); VALGRIND_DO_CHANGED_LEAK_CHECK;",
@@ -50,7 +41,23 @@ object GenUtil {
             Span.synth
           )
       }
-      val body = stmts.foldRight(finalRes: Expr)(
+    }
+  }
+
+  /** Generated types, variables, and assignments that will be turned into an
+    * AST
+    */
+  case class GeneratedProgram(
+      types: List[TypeDef],
+      /** Maps variable names to types */
+      varTypes: Map[String, String],
+      vars: List[(String, Expr)],
+      stmts: List[GenStmt]
+  ) {
+    def asAst: ParsedFile = {
+      val finalRes = IntLiteral(0, Span.synth)
+      val exprs = GenUtil.insertDecrs(this.stmts, this.varTypes)
+      val body = exprs.foldRight(finalRes: Expr)(
         BinExpr(_, Spanned(BinOp.Seq, Span.synth), _)
       )
       val withVarDefs = this.vars
@@ -71,25 +78,58 @@ object GenUtil {
   }
 
   given shrinkGenerated: Shrink[GeneratedProgram] = Shrink { prog =>
-    // Decrementing RCs is necessary to avoid leaks, so we never remove that
-    val (decrInds, nonDecrInds) = prog.stmts.indices
-      .partition(i => prog.stmts(i).isInstanceOf[GenStmt.DecrRc])
-    if (nonDecrInds.isEmpty) Stream.empty
+    if (prog.stmts.isEmpty) Stream.empty
     else {
-      val shrunkInds = Shrink.shrink(nonDecrInds)(Shrink.shrinkContainer)
-      val progs = shrunkInds.map { nonDecrInds =>
-        val stmts = prog.stmts.zipWithIndex
-          .filter((_, i) => decrInds.contains(i) || nonDecrInds.contains(i))
-          .map(_._1)
-        prog.copy(stmts = stmts)
+      Shrink.shrink(prog.stmts)(Shrink.shrinkContainer)
+      .map {
+        foo =>
+          println(s"Here ${foo.size}")
+          foo
       }
-      progs.filter { prog =>
-        try {
-          Typer.resolveAllTypes(prog.asAst)
-          true
-        } catch { case _: CompileError => false }
+        .map(stmts => prog.copy(stmts = stmts))
+    }
+  }
+
+  /** Insert a call to decrement the reference count of every variable after its
+    * last usage. Also converts [[GenStmt]]s to [[Expr]]s
+    * @param varTypes
+    *   Map variable names to types
+    */
+  def insertDecrs(
+      stmts: List[GenStmt],
+      varTypes: Map[String, String]
+  ): List[Expr] = {
+    val allVars = varTypes.keySet
+
+    def decrRc(name: String, typ: String): Expr = FnCall(
+      Spanned("c", Span.synth),
+      List(
+        // Why the "; " at the start? So it's not matched by the regex that
+        // removes all the $decr_Type calls at the bottom of the main function
+        StringLiteral(s"; $$decr_$typ($name);", Span.synth)
+      ),
+      None,
+      None,
+      Span.synth
+    )
+
+    def rec(stmts: List[GenStmt]): (List[Expr], Set[String]) = {
+      stmts match {
+        case Nil => (Nil, allVars.toSet)
+        case (stmt @ GenStmt.Assign(lhs, field, fieldType, rhs)) :: rest =>
+          val (next, remVars) = rec(rest)
+          val decrLhs =
+            if (remVars.contains(lhs)) List(decrRc(lhs, varTypes(lhs))) else Nil
+          val decrRhs =
+            if (remVars.contains(rhs)) List(decrRc(rhs, varTypes(rhs))) else Nil
+          (stmt.asAst :: decrLhs ::: decrRhs ::: next, remVars - lhs - rhs)
+        case stmt :: rest =>
+          val (next, remVars) = rec(rest)
+          (stmt.asAst :: next, remVars)
       }
     }
+    val (res, remVars) = rec(stmts)
+    remVars.map(varName => decrRc(varName, varTypes(varName))).toList ::: res
   }
 
   def sequence[T](gens: Iterable[Gen[T]]): Gen[List[T]] = Gen
@@ -214,10 +254,10 @@ object GenUtil {
   def genAssignments(
       allTypes: List[TypeDef],
       vars: Map[String, Set[String]]
-  ): Gen[List[SetFieldExpr]] = {
+  ): Gen[List[GenStmt]] = {
     val types = allTypes.filterNot(_.name.startsWith("Opt"))
 
-    def helper(typ: TypeDef): Gen[List[SetFieldExpr]] = {
+    def helper(typ: TypeDef): Gen[List[GenStmt]] = {
       val currVars = vars(typ.name)
       GenUtil.sequence(
         typ.cases.head.fields.filter(_.typ.name.startsWith("Opt")).map {
@@ -232,19 +272,7 @@ object GenUtil {
             Gen.someOf(currVars).flatMap { vars =>
               GenUtil.sequence(vars.map { varName =>
                 Gen.oneOf(candidates).map { ref =>
-                  SetFieldExpr(
-                    Spanned(varName, Span.synth),
-                    field.name,
-                    CtorCall(
-                      Spanned(s"Some$fieldType", Span.synth),
-                      List((
-                        Spanned(GenUtil.SomeField, Span.synth),
-                        VarRef(ref, Span.synth)
-                      )),
-                      Span.synth
-                    ),
-                    Span.synth
-                  )
+                  GenStmt.Assign(varName, field.name.value, fieldType, ref)
                 }
               })
             }

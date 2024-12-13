@@ -16,7 +16,7 @@ class FuzzTests
     extends AnyPropSpec with ScalaCheckPropertyChecks with should.Matchers {
   property("No intermediate checks", Slow) {
     given PropertyCheckConfiguration =
-      PropertyCheckConfiguration(minSize = 1, sizeRange = 30)
+      PropertyCheckConfiguration(minSize = 5, sizeRange = 30)
 
     val genFull = for {
       size <- Gen.size
@@ -29,9 +29,9 @@ class FuzzTests
         .genAssignments(allTypes, allVars.view.mapValues(_.keySet).toMap)
     } yield {
       val finalRes = IntLiteral(0, Span.synth)
-      val withAssignments = assignExprs.foldRight(finalRes: Expr)(
-        BinExpr(_, Spanned(BinOp.Seq, Span.synth), _)
-      )
+      val withAssignments = assignExprs.foldRight(finalRes: Expr) {
+        (stmt, acc) => BinExpr(stmt.asAst, Spanned(BinOp.Seq, Span.synth), acc)
+      }
       val withVarDefs = sccs.flatMap(
         _.filterNot(_.name.startsWith("Opt")).flatMap(typ => allVars(typ.name))
       ).foldLeft(withAssignments) { case (body, (varName, value)) =>
@@ -62,49 +62,8 @@ class FuzzTests
 
   property("With intermediate checks", Slow) {
     given PropertyCheckConfiguration =
-      PropertyCheckConfiguration(minSize = 1, sizeRange = 30)
-
-    /** Insert a call to decrement the reference count of every variable after
-      * its last usage
-      * @param varTypes
-      *   Map variable names to types
-      * @return
-      */
-    def insertDecrs(
-        assignExprs: List[SetFieldExpr],
-        allVars: Iterable[String],
-        varTypes: Map[String, String]
-    ): List[GenStmt] = {
-      def rec(assignExprs: List[SetFieldExpr]): (List[GenStmt], Set[String]) = {
-        assignExprs match {
-          case Nil => (Nil, allVars.toSet)
-          case (expr @ SetFieldExpr(
-                Spanned(lhsVarName, _),
-                _,
-                CtorCall(_, List((_, VarRef(rhsVarName, _))), _),
-                span
-              )) :: rest =>
-            val (next, remVars) = rec(rest)
-            val decrLhs =
-              if (remVars.contains(lhsVarName))
-                List(GenStmt.DecrRc(lhsVarName, varTypes(lhsVarName)))
-              else Nil
-            val decrRhs =
-              if (remVars.contains(rhsVarName))
-                List(GenStmt.DecrRc(rhsVarName, varTypes(rhsVarName)))
-              else Nil
-            (
-              GenStmt.Assign(expr) :: decrLhs ::: decrRhs ::: next,
-              remVars - lhsVarName - rhsVarName
-            )
-          case expr :: _ =>
-            throw new Error(s"[insertDecrs.rec] Unexpected kind of expr: $expr")
-        }
-      }
-      val (res, remVars) = rec(assignExprs)
-      remVars.map(varName => GenStmt.DecrRc(varName, varTypes(varName)))
-        .toList ::: res
-    }
+      PropertyCheckConfiguration(minSize = 5, sizeRange = 40)
+    given Shrink[GeneratedProgram] = GenUtil.shrinkGenerated
 
     // TODO maybe randomness isn't needed here, just insert one check every few statements or something
     def insertValgrindChecks(stmts: List[GenStmt]): Gen[List[GenStmt]] = {
@@ -127,15 +86,11 @@ class FuzzTests
       seed <- Gen.long
       rand = Random(seed)
       assignExprs = Random.shuffle(assignExprsOrdered)
-      withDecrs = insertDecrs(
-        assignExprs,
-        allVars.values.flatMap(_.keySet),
-        allVars.flatMap((typ, vars) => vars.keySet.map(_ -> typ)).toMap
-      )
-      withChecks <- insertValgrindChecks(withDecrs)
+      withChecks <- insertValgrindChecks(assignExprs)
     } yield {
       GeneratedProgram(
         allTypes,
+        allVars.flatMap((typ, vars) => vars.keySet.map(_ -> typ)).toMap,
         sccs.flatMap(
           _.filterNot(_.name.startsWith("Opt"))
             .flatMap(typ => allVars(typ.name))
@@ -143,8 +98,6 @@ class FuzzTests
         withChecks
       )
     }
-
-    given Shrink[GeneratedProgram] = GenUtil.shrinkGenerated
 
     forAll(genFull) { generated =>
       ExecTests.valgrindCheck(
