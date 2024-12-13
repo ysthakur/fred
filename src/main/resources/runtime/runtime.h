@@ -67,12 +67,10 @@ void addPCR(
   struct PCRBucket **prev = &pcrBuckets;
   while (*prev != NULL && (*prev)->scc < scc)
   {
-    // fprintf(stderr, "[addPCR] prev scc: %d\n", (*prev)->scc);
     prev = &(*prev)->next;
   }
 
   struct PCR *pcr = malloc(sizeof(struct PCR));
-  fprintf(stderr, "[addPCR] Added PCR %p, prev = %p, scc: %d, obj: %p\n", pcr, *prev, scc, obj);
   pcr->obj = obj;
   pcr->markGray = markGray;
   pcr->scan = scan;
@@ -99,7 +97,6 @@ void removePCR(Common *obj, int scc)
   if (!obj->addedPCR)
     return;
   obj->addedPCR = 0;
-  fprintf(stderr, "[removePCR] Trying to remove object %p\n", obj);
 
   struct PCRBucket **prevBucket = &pcrBuckets;
   struct PCRBucket *bucket = pcrBuckets;
@@ -113,13 +110,10 @@ void removePCR(Common *obj, int scc)
   struct PCR *head = bucket->pcrs;
   while (head != NULL)
   {
-    fprintf(stderr, "[removePCR] head = %p\n", head);
     if (head->obj == obj)
     {
-      fprintf(stderr, "[removePCR] Removed %p (obj=%p)\n", head, obj);
       *prev = head->next;
       if (bucket->pcrs == NULL) {
-        fprintf(stderr, "[removePCR] Removed bucket too\n");
         // This was the only PCR in the bucket, so remove the bucket too
         *prevBucket = bucket->next;
         free(bucket);
@@ -187,7 +181,6 @@ void processAllPCRs()
     }
     collectWhiteAllPCRs(pcrBuckets->pcrs);
     collectFreeList();
-    fprintf(stderr, "[processAllPCRs]: Processed scc %d\n", pcrBuckets->scc);
     struct PCRBucket *next = pcrBuckets->next;
     free(pcrBuckets);
     pcrBuckets = next;
