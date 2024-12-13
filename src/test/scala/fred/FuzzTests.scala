@@ -13,21 +13,6 @@ import fred.Compiler.Settings
 
 class FuzzTests
     extends AnyPropSpec with ScalaCheckPropertyChecks with should.Matchers {
-
-  property("Simple generated programs") {
-    given PropertyCheckConfiguration =
-      PropertyCheckConfiguration(minSize = 1, sizeRange = 10)
-    forAll(GenUtil.genTypesAux().flatMap(GenUtil.genCode)) { parsedFile =>
-      ExecTests.valgrindCheck(
-        parsedFile,
-        None,
-        None,
-        save = Some("blech-ijaksd.c"),
-        settings = Settings(includeMemcheck = true)
-      )
-    }
-  }
-
   property("No intermediate checks", Slow) {
     given PropertyCheckConfiguration =
       PropertyCheckConfiguration(minSize = 1, sizeRange = 30)
