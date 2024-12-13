@@ -8,6 +8,7 @@ export def run [ file: string, lazyMarkScan: bool ] {
   } else {
     java -jar $jar $file -o $outExe
   }
+  print $"Compiled ($file) \(lazy-mark-scan: ($lazyMarkScan))"
   let res = (
     ^$"./($outExe)"
       | lines

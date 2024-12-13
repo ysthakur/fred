@@ -12,7 +12,7 @@ object GenUtil {
 
   /** A generated statement */
   enum GenStmt {
-    case Assign(expr: SetFieldExpr)
+    case Assign(lhs: String, field: String, fieldType: String, rhs: String)
 
     /** Decrement the reference count of some variable */
     case DecrRc(name: String, typ: String)
@@ -27,7 +27,7 @@ object GenUtil {
     def asAst: ParsedFile = {
       val finalRes = IntLiteral(0, Span.synth)
       val stmts = this.stmts.map {
-        case GenStmt.Assign(expr) => expr
+        case GenStmt.Assign(lhs, field, fieldType, rhs) => expr
         case GenStmt.DecrRc(name, typ) => FnCall(
             Spanned("c", Span.synth),
             List(
