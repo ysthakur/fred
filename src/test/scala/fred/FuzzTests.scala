@@ -10,6 +10,7 @@ import org.scalatest.tagobjects.Slow
 import org.scalacheck.Shrink
 
 import fred.Compiler.Settings
+import fred.GenUtil.{GenStmt, GeneratedProgram}
 
 class FuzzTests
     extends AnyPropSpec with ScalaCheckPropertyChecks with should.Matchers {
@@ -73,20 +74,8 @@ class FuzzTests
         assignExprs: List[SetFieldExpr],
         allVars: Iterable[String],
         varTypes: Map[String, String]
-    ): List[Expr] = {
-      def decrVar(varName: String): Expr = FnCall(
-        Spanned("c", Span.synth),
-        List(
-          // Why the "; " at the start? So it's not matched in the regex at the bottom
-          // of this test and removed
-          StringLiteral(s"; $$decr_${varTypes(varName)}($varName);", Span.synth)
-        ),
-        None,
-        None,
-        Span.synth
-      )
-
-      def rec(assignExprs: List[SetFieldExpr]): (List[Expr], Set[String]) = {
+    ): List[GenStmt] = {
+      def rec(assignExprs: List[SetFieldExpr]): (List[GenStmt], Set[String]) = {
         assignExprs match {
           case Nil => (Nil, allVars.toSet)
           case (expr @ SetFieldExpr(
@@ -97,13 +86,15 @@ class FuzzTests
               )) :: rest =>
             val (next, remVars) = rec(rest)
             val decrLhs =
-              if (remVars.contains(lhsVarName)) List(decrVar(lhsVarName))
+              if (remVars.contains(lhsVarName))
+                List(GenStmt.DecrRc(lhsVarName, varTypes(lhsVarName)))
               else Nil
             val decrRhs =
-              if (remVars.contains(rhsVarName)) List(decrVar(rhsVarName))
+              if (remVars.contains(rhsVarName))
+                List(GenStmt.DecrRc(rhsVarName, varTypes(rhsVarName)))
               else Nil
             (
-              expr :: decrLhs ::: decrRhs ::: next,
+              GenStmt.Assign(expr) :: decrLhs ::: decrRhs ::: next,
               remVars - lhsVarName - rhsVarName
             )
           case expr :: _ =>
@@ -111,28 +102,15 @@ class FuzzTests
         }
       }
       val (res, remVars) = rec(assignExprs)
-      remVars.map(decrVar).toList ::: res
+      remVars.map(varName => GenStmt.DecrRc(varName, varTypes(varName)))
+        .toList ::: res
     }
 
     // TODO maybe randomness isn't needed here, just insert one check every few statements or something
-    def insertValgrindChecks(stmts: List[Expr]): Gen[List[Expr]] = {
+    def insertValgrindChecks(stmts: List[GenStmt]): Gen[List[GenStmt]] = {
       GenUtil.sequence(stmts.map { stmt =>
         Gen.prob(0.1).map { insert =>
-          if (insert) {
-            List(
-              stmt,
-              FnCall(
-                Spanned("c", Span.synth),
-                List(StringLiteral(
-                  "processAllPCRs(); VALGRIND_DO_CHANGED_LEAK_CHECK;",
-                  Span.synth
-                )),
-                None,
-                None,
-                Span.synth
-              )
-            )
-          } else { List(stmt) }
+          if (insert) List(stmt, GenStmt.ValgrindCheck) else List(stmt)
         }
       }).map(_.flatten)
     }
@@ -156,30 +134,21 @@ class FuzzTests
       )
       withChecks <- insertValgrindChecks(withDecrs)
     } yield {
-      val finalRes = IntLiteral(0, Span.synth)
-      val withAssignments = withChecks.foldRight(finalRes: Expr)(
-        BinExpr(_, Spanned(BinOp.Seq, Span.synth), _)
-      )
-      val withVarDefs = sccs.flatMap(
-        _.filterNot(_.name.startsWith("Opt")).flatMap(typ => allVars(typ.name))
-      ).foldLeft(withAssignments) { case (body, (varName, value)) =>
-        LetExpr(Spanned(varName, Span.synth), value, body, Span.synth)
-      }
-      ParsedFile(
+      GeneratedProgram(
         allTypes,
-        List(FnDef(
-          Spanned("main", Span.synth),
-          Nil,
-          TypeRef("int", Span.synth),
-          withVarDefs,
-          Span.synth
-        ))
+        sccs.flatMap(
+          _.filterNot(_.name.startsWith("Opt"))
+            .flatMap(typ => allVars(typ.name))
+        ),
+        withChecks
       )
     }
 
-    forAll(genFull) { parsedFile =>
+    given Shrink[GeneratedProgram] = GenUtil.shrinkGenerated
+
+    forAll(genFull) { generated =>
       ExecTests.valgrindCheck(
-        parsedFile,
+        generated.asAst,
         None,
         None,
         save = Some("blech-1234sd.c"),

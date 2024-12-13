@@ -86,7 +86,6 @@ object Compiler {
       if (settings.includeMemcheck) "-I /usr/include/valgrind" else ""
 
     assert(s"gcc $extraIncludes -o $outExe -x c -".run(io).exitValue() == 0)
-    System.err.println(s"Created executable at $outExe")
     File(outExe).setExecutable(true)
 
     runtimeHeader.close()

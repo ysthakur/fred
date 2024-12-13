@@ -3,14 +3,97 @@ package fred
 import scala.jdk.CollectionConverters.*
 
 import org.scalacheck.Gen
+import org.scalacheck.Shrink
 
 object GenUtil {
   val SomeField = "value"
 
   case class GenTypeAux(refs: List[Int])
 
-  def sequence[T](gens: Iterable[Gen[T]]): Gen[List[T]] =
-    Gen.sequence[List[T], T](gens)
+  /** A generated statement */
+  enum GenStmt {
+    case Assign(expr: SetFieldExpr)
+
+    /** Decrement the reference count of some variable */
+    case DecrRc(name: String, typ: String)
+    case ValgrindCheck
+  }
+
+  case class GeneratedProgram(
+      types: List[TypeDef],
+      vars: List[(String, Expr)],
+      stmts: List[GenStmt]
+  ) {
+    def asAst: ParsedFile = {
+      val finalRes = IntLiteral(0, Span.synth)
+      val stmts = this.stmts.map {
+        case GenStmt.Assign(expr) => expr
+        case GenStmt.DecrRc(name, typ) => FnCall(
+            Spanned("c", Span.synth),
+            List(
+              // Why the "; " at the start? So it's not matched by the regex that
+              // removes all the $decr_Type calls at the bottom of the main function
+              StringLiteral(s"; $$decr_$typ($name);", Span.synth)
+            ),
+            None,
+            None,
+            Span.synth
+          )
+        case GenStmt.ValgrindCheck => FnCall(
+            Spanned("c", Span.synth),
+            List(StringLiteral(
+              "processAllPCRs(); VALGRIND_DO_CHANGED_LEAK_CHECK;",
+              Span.synth
+            )),
+            None,
+            None,
+            Span.synth
+          )
+      }
+      val body = stmts.foldRight(finalRes: Expr)(
+        BinExpr(_, Spanned(BinOp.Seq, Span.synth), _)
+      )
+      val withVarDefs = this.vars
+        .foldLeft(body) { case (body, (varName, value)) =>
+          LetExpr(Spanned(varName, Span.synth), value, body, Span.synth)
+        }
+      ParsedFile(
+        this.types,
+        List(FnDef(
+          Spanned("main", Span.synth),
+          Nil,
+          TypeRef("int", Span.synth),
+          withVarDefs,
+          Span.synth
+        ))
+      )
+    }
+  }
+
+  given shrinkGenerated: Shrink[GeneratedProgram] = Shrink { prog =>
+    // Decrementing RCs is necessary to avoid leaks, so we never remove that
+    val (decrInds, nonDecrInds) = prog.stmts.indices
+      .partition(i => prog.stmts(i).isInstanceOf[GenStmt.DecrRc])
+    if (nonDecrInds.isEmpty) Stream.empty
+    else {
+      val shrunkInds = Shrink.shrink(nonDecrInds)(Shrink.shrinkContainer)
+      val progs = shrunkInds.map { nonDecrInds =>
+        val stmts = prog.stmts.zipWithIndex
+          .filter((_, i) => decrInds.contains(i) || nonDecrInds.contains(i))
+          .map(_._1)
+        prog.copy(stmts = stmts)
+      }
+      progs.filter { prog =>
+        try {
+          Typer.resolveAllTypes(prog.asAst)
+          true
+        } catch { case _: CompileError => false }
+      }
+    }
+  }
+
+  def sequence[T](gens: Iterable[Gen[T]]): Gen[List[T]] = Gen
+    .sequence[List[T], T](gens)
 
   /** Generate a bunch of types completely randomly (any type could have
     * references to any other type). All references are mutable.
@@ -20,9 +103,8 @@ object GenUtil {
       Gen.listOf(Gen.choose(0, numTypes - 1))
     }).map { types =>
       val graph = types.zipWithIndex.map { (refs, typeInd) =>
-        s"T$typeInd" -> refs.zipWithIndex
-          .map((ref, i) => (true, s"f$i", s"T$ref"))
-          .toSet
+        s"T$typeInd" ->
+          refs.zipWithIndex.map((ref, i) => (true, s"f$i", s"T$ref")).toSet
       }.toMap
       toTypeDefs(graph)
     }
@@ -40,11 +122,10 @@ object GenUtil {
       scc.map { typ =>
         typ.copy(cases = typ.cases.map { variant =>
           variant.copy(fields = variant.fields.map { field =>
-            if (scc.exists(_.name == field.typ.name))
-              field.copy(
-                mutable = true,
-                typ = TypeRef(s"Opt${field.typ.name}", Span.synth)
-              )
+            if (scc.exists(_.name == field.typ.name)) field.copy(
+              mutable = true,
+              typ = TypeRef(s"Opt${field.typ.name}", Span.synth)
+            )
             else field.copy(mutable = false, span = Span(-4, -6))
           })
         })
@@ -57,21 +138,15 @@ object GenUtil {
         List(
           EnumCase(
             Spanned(s"Some${typ.name}", Span.synth),
-            List(
-              FieldDef(
-                false,
-                Spanned(SomeField, Span.synth),
-                TypeRef(typ.name, Span.synth),
-                Span.synth
-              )
-            ),
+            List(FieldDef(
+              false,
+              Spanned(SomeField, Span.synth),
+              TypeRef(typ.name, Span.synth),
+              Span.synth
+            )),
             Span.synth
           ),
-          EnumCase(
-            Spanned(s"None${typ.name}", Span.synth),
-            Nil,
-            Span.synth
-          )
+          EnumCase(Spanned(s"None${typ.name}", Span.synth), Nil, Span.synth)
         ),
         Span.synth
       )
@@ -97,51 +172,38 @@ object GenUtil {
         typ: TypeDef,
         prevTypes: Map[String, Map[String, Expr]]
     ): Gen[Map[String, Expr]] = {
-      GenUtil
-        .sequence(1.to(numVars).map { i =>
-          GenUtil
-            .sequence(typ.cases.head.fields.map { field =>
-              prevTypes.get(field.typ.name) match {
-                case Some(vars) =>
-                  Gen
-                    .oneOf(vars.keySet)
-                    .map(field.name -> VarRef(_, Span.synth))
-                case None =>
-                  Gen.const(
-                    field.name -> CtorCall(
-                      Spanned(
-                        s"None${field.typ.name.stripPrefix("Opt")}",
-                        Span.synth
-                      ),
-                      Nil,
-                      Span.synth
-                    )
-                  )
-              }
-            })
-            .map { fieldArgs =>
-              CtorCall(typ.cases.head.name, fieldArgs, Span.synth)
-            }
-        })
-        .map { values =>
-          values.zipWithIndex.map { (value, i) =>
-            s"v${typ.name}_$i" -> value
-          }.toMap
+      GenUtil.sequence(1.to(numVars).map { i =>
+        GenUtil.sequence(typ.cases.head.fields.map { field =>
+          prevTypes.get(field.typ.name) match {
+            case Some(vars) => Gen.oneOf(vars.keySet)
+                .map(field.name -> VarRef(_, Span.synth))
+            case None => Gen.const(
+                field.name -> CtorCall(
+                  Spanned(
+                    s"None${field.typ.name.stripPrefix("Opt")}",
+                    Span.synth
+                  ),
+                  Nil,
+                  Span.synth
+                )
+              )
+          }
+        }).map { fieldArgs =>
+          CtorCall(typ.cases.head.name, fieldArgs, Span.synth)
         }
+      }).map { values =>
+        values.zipWithIndex.map { (value, i) => s"v${typ.name}_$i" -> value }
+          .toMap
+      }
     }
 
-    sccs.foldRight(
-      Gen.const(Map.empty[String, Map[String, Expr]])
-    ) { (scc, prevVars) =>
-      prevVars.flatMap { prevVars =>
-        GenUtil
-          .sequence(
-            scc
-              .filterNot(_.name.startsWith("Opt"))
-              .map(typ => helper(typ, prevVars).map(typ.name -> _))
-          )
-          .map(_.toMap ++ prevVars)
-      }
+    sccs.foldRight(Gen.const(Map.empty[String, Map[String, Expr]])) {
+      (scc, prevVars) =>
+        prevVars.flatMap { prevVars =>
+          GenUtil.sequence(scc.filterNot(_.name.startsWith("Opt")).map(typ =>
+            helper(typ, prevVars).map(typ.name -> _)
+          )).map(_.toMap ++ prevVars)
+        }
     }
   }
 
@@ -157,42 +219,37 @@ object GenUtil {
 
     def helper(typ: TypeDef): Gen[List[SetFieldExpr]] = {
       val currVars = vars(typ.name)
-      GenUtil
-        .sequence(
-          typ.cases.head.fields.filter(_.typ.name.startsWith("Opt")).map {
-            field =>
-              val fieldType = field.typ.name.stripPrefix("Opt")
-              val candidates = vars
-                .getOrElse(
-                  fieldType,
-                  throw new RuntimeException(
-                    s"[genAssignments] No such type: $fieldType"
-                  )
-                )
-              Gen.someOf(currVars).flatMap { vars =>
-                GenUtil.sequence(vars.map { varName =>
-                  Gen.oneOf(candidates).map { ref =>
-                    SetFieldExpr(
-                      Spanned(varName, Span.synth),
-                      field.name,
-                      CtorCall(
-                        Spanned(s"Some$fieldType", Span.synth),
-                        List(
-                          (
-                            Spanned(GenUtil.SomeField, Span.synth),
-                            VarRef(ref, Span.synth)
-                          )
-                        ),
-                        Span.synth
-                      ),
+      GenUtil.sequence(
+        typ.cases.head.fields.filter(_.typ.name.startsWith("Opt")).map {
+          field =>
+            val fieldType = field.typ.name.stripPrefix("Opt")
+            val candidates = vars.getOrElse(
+              fieldType,
+              throw new RuntimeException(
+                s"[genAssignments] No such type: $fieldType"
+              )
+            )
+            Gen.someOf(currVars).flatMap { vars =>
+              GenUtil.sequence(vars.map { varName =>
+                Gen.oneOf(candidates).map { ref =>
+                  SetFieldExpr(
+                    Spanned(varName, Span.synth),
+                    field.name,
+                    CtorCall(
+                      Spanned(s"Some$fieldType", Span.synth),
+                      List((
+                        Spanned(GenUtil.SomeField, Span.synth),
+                        VarRef(ref, Span.synth)
+                      )),
                       Span.synth
-                    )
-                  }
-                })
-              }
-          }
-        )
-        .map(_.flatten)
+                    ),
+                    Span.synth
+                  )
+                }
+              })
+            }
+        }
+      ).map(_.flatten)
     }
 
     GenUtil.sequence(types.map(helper)).map(_.flatten)
@@ -237,15 +294,15 @@ object GenUtil {
   ): List[TypeDef] = {
     graph.map { (name, _) =>
       val spannedName = Spanned(name, Span.synth)
-      val fields = graph(name).toList.map {
-        (mutable, fieldName, neighborName) =>
+      val fields = graph(name).toList
+        .map { (mutable, fieldName, neighborName) =>
           FieldDef(
             mutable,
             Spanned(fieldName, Span.synth),
             TypeRef(neighborName, Span.synth),
             Span.synth
           )
-      }
+        }
       TypeDef(
         spannedName,
         List(EnumCase(spannedName, fields, Span.synth)),
@@ -259,56 +316,46 @@ object GenUtil {
       val typeName = Spanned(nameForType(i), Span.synth)
       TypeDef(
         typeName,
-        List(
-          EnumCase(
-            typeName,
-            refs.zipWithIndex.map { (typeInd, fieldInd) =>
-              val fieldType =
-                if (i == typeInd) nameForOptType(typeInd)
-                else nameForType(typeInd)
-              FieldDef(
-                true,
-                Spanned(nameForField(fieldInd), Span.synth),
-                TypeRef(fieldType, Span.synth),
-                Span.synth
-              )
-            },
-            Span.synth
-          )
-        ),
+        List(EnumCase(
+          typeName,
+          refs.zipWithIndex.map { (typeInd, fieldInd) =>
+            val fieldType =
+              if (i == typeInd) nameForOptType(typeInd)
+              else nameForType(typeInd)
+            FieldDef(
+              true,
+              Spanned(nameForField(fieldInd), Span.synth),
+              TypeRef(fieldType, Span.synth),
+              Span.synth
+            )
+          },
+          Span.synth
+        )),
         Span.synth
       )
     }
     // Generate optional types for self-referential types
-    val optTypes = typeAuxes.zipWithIndex
-      .filter { case (GenTypeAux(refs), i) =>
-        refs.contains(i)
-      }
-      .map { (_, i) =>
-        TypeDef(
-          Spanned(nameForOptType(i), Span.synth),
-          List(
-            EnumCase(
-              Spanned(someCtorName(i), Span.synth),
-              List(
-                FieldDef(
-                  false,
-                  Spanned(SomeField, Span.synth),
-                  TypeRef(nameForType(i), Span.synth),
-                  Span.synth
-                )
-              ),
+    val optTypes = typeAuxes.zipWithIndex.filter { case (GenTypeAux(refs), i) =>
+      refs.contains(i)
+    }.map { (_, i) =>
+      TypeDef(
+        Spanned(nameForOptType(i), Span.synth),
+        List(
+          EnumCase(
+            Spanned(someCtorName(i), Span.synth),
+            List(FieldDef(
+              false,
+              Spanned(SomeField, Span.synth),
+              TypeRef(nameForType(i), Span.synth),
               Span.synth
-            ),
-            EnumCase(
-              Spanned(noneCtorName(i), Span.synth),
-              Nil,
-              Span.synth
-            )
+            )),
+            Span.synth
           ),
-          Span.synth
-        )
-      }
+          EnumCase(Spanned(noneCtorName(i), Span.synth), Nil, Span.synth)
+        ),
+        Span.synth
+      )
+    }
     types ++ optTypes
   }
 
@@ -321,45 +368,36 @@ object GenUtil {
       val fieldGens = refs.zipWithIndex.map { case (fieldTypeInd, fieldInd) =>
         val fieldName = Spanned(nameForField(fieldInd), Span.synth)
         val value =
-          if (fieldTypeInd < typeInd) {
-            genExpr(fieldTypeInd)
-          } else {
-            Gen.const(
-              CtorCall(
-                Spanned(noneCtorName(typeInd), Span.synth),
-                Nil,
-                Span.synth
-              )
-            )
+          if (fieldTypeInd < typeInd) { genExpr(fieldTypeInd) }
+          else {
+            Gen.const(CtorCall(
+              Spanned(noneCtorName(typeInd), Span.synth),
+              Nil,
+              Span.synth
+            ))
           }
         value.map((fieldName, _))
       }
       // TODO Why in the world is this an ArrayList?
       sequence(fieldGens).map { fields =>
-        CtorCall(
-          Spanned(nameForType(typeInd), Span.synth),
-          fields,
-          Span.synth
-        )
+        CtorCall(Spanned(nameForType(typeInd), Span.synth), fields, Span.synth)
       }
     }
 
     genExpr(typeAuxes.length - 1).map { expr =>
       ParsedFile(
         types,
-        List(
-          FnDef(
-            Spanned("main", Span.synth),
-            Nil,
-            TypeRef("int", Span.synth),
-            BinExpr(
-              expr,
-              Spanned(BinOp.Seq, Span.synth),
-              IntLiteral(0, Span.synth)
-            ),
-            Span.synth
-          )
-        )
+        List(FnDef(
+          Spanned("main", Span.synth),
+          Nil,
+          TypeRef("int", Span.synth),
+          BinExpr(
+            expr,
+            Spanned(BinOp.Seq, Span.synth),
+            IntLiteral(0, Span.synth)
+          ),
+          Span.synth
+        ))
       )
     }
   }
@@ -407,13 +445,11 @@ object GenUtil {
         }
         val thisType = TypeDef(
           Spanned(typeName, Span.synth),
-          List(
-            EnumCase(
-              Spanned(typeName, Span.synth),
-              selfRefFields ++ otherRefFields,
-              Span.synth
-            )
-          ),
+          List(EnumCase(
+            Spanned(typeName, Span.synth),
+            selfRefFields ++ otherRefFields,
+            Span.synth
+          )),
           Span.synth
         )
         val optType = TypeDef(
@@ -421,21 +457,15 @@ object GenUtil {
           List(
             EnumCase(
               Spanned(s"Some$typeName", Span.synth),
-              List(
-                FieldDef(
-                  false,
-                  Spanned("value", Span.synth),
-                  TypeRef(typeName, Span.synth),
-                  Span.synth
-                )
-              ),
+              List(FieldDef(
+                false,
+                Spanned("value", Span.synth),
+                TypeRef(typeName, Span.synth),
+                Span.synth
+              )),
               Span.synth
             ),
-            EnumCase(
-              Spanned(s"None$typeName", Span.synth),
-              Nil,
-              Span.synth
-            )
+            EnumCase(Spanned(s"None$typeName", Span.synth), Nil, Span.synth)
           ),
           Span.synth
         )
