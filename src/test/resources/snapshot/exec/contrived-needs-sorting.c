@@ -125,7 +125,6 @@ struct ExprList* new$ExprCons(struct Expr* head, struct ExprList* tail);
 struct Expr* new$Expr(struct File* file);
 int main();
 void $free_CtxRef(struct CtxRef* this) {
-  fprintf(stderr, "Freeing CtxRef\n");
   switch (this->kind) {
   case CtxRef_tag:
     $decr_Context(this->ref);
@@ -134,7 +133,6 @@ void $free_CtxRef(struct CtxRef* this) {
   free(this);
 }
 void $free_Context(struct Context* this) {
-  fprintf(stderr, "Freeing Context\n");
   switch (this->kind) {
   case Context_tag:
     break;
@@ -142,7 +140,6 @@ void $free_Context(struct Context* this) {
   free(this);
 }
 void $free_FileList(struct FileList* this) {
-  fprintf(stderr, "Freeing FileList\n");
   switch (this->kind) {
   case FileNil_tag:
     break;
@@ -153,7 +150,6 @@ void $free_FileList(struct FileList* this) {
   free(this);
 }
 void $free_File(struct File* this) {
-  fprintf(stderr, "Freeing File\n");
   switch (this->kind) {
   case File_tag:
     break;
@@ -161,7 +157,6 @@ void $free_File(struct File* this) {
   free(this);
 }
 void $free_ExprList(struct ExprList* this) {
-  fprintf(stderr, "Freeing ExprList\n");
   switch (this->kind) {
   case ExprNil_tag:
     break;
@@ -171,7 +166,6 @@ void $free_ExprList(struct ExprList* this) {
   free(this);
 }
 void $free_Expr(struct Expr* this) {
-  fprintf(stderr, "Freeing Expr\n");
   switch (this->kind) {
   case Expr_tag:
     break;
@@ -179,7 +173,6 @@ void $free_Expr(struct Expr* this) {
   free(this);
 }
 void $decr_CtxRef(struct CtxRef* this) {
-  fprintf(stderr, "Decrementing CtxRef (%p)\n", this);
   if (--this->rc == 0) {
     switch (this->kind) {
     case CtxRef_tag:
@@ -191,7 +184,6 @@ void $decr_CtxRef(struct CtxRef* this) {
   }
 }
 void $decr_Context(struct Context* this) {
-  fprintf(stderr, "Decrementing Context (%p)\n", this);
   if (--this->rc == 0) {
     switch (this->kind) {
     case Context_tag:
@@ -210,7 +202,6 @@ void $decr_Context(struct Context* this) {
   }
 }
 void $decr_FileList(struct FileList* this) {
-  fprintf(stderr, "Decrementing FileList (%p)\n", this);
   if (--this->rc == 0) {
     switch (this->kind) {
     case FileNil_tag:
@@ -233,7 +224,6 @@ void $decr_FileList(struct FileList* this) {
   }
 }
 void $decr_File(struct File* this) {
-  fprintf(stderr, "Decrementing File (%p)\n", this);
   if (--this->rc == 0) {
     switch (this->kind) {
     case File_tag:
@@ -252,7 +242,6 @@ void $decr_File(struct File* this) {
   }
 }
 void $decr_ExprList(struct ExprList* this) {
-  fprintf(stderr, "Decrementing ExprList (%p)\n", this);
   if (--this->rc == 0) {
     switch (this->kind) {
     case ExprNil_tag:
@@ -274,7 +263,6 @@ void $decr_ExprList(struct ExprList* this) {
   }
 }
 void $decr_Expr(struct Expr* this) {
-  fprintf(stderr, "Decrementing Expr (%p)\n", this);
   if (--this->rc == 0) {
     switch (this->kind) {
     case Expr_tag:
@@ -527,7 +515,6 @@ void $collectWhite_CtxRef(struct CtxRef* this) {
       $collectWhite_Context(this->ref);
       break;
     }
-    fprintf(stderr, "Removing CtxRef\n");
     struct FreeCell *curr = freeList;
     freeList = malloc(sizeof(struct FreeCell));
     freeList->obj = (void *) this;
@@ -543,7 +530,6 @@ void $collectWhite_Context(struct Context* this) {
       $collectWhite_FileList(this->files);
       break;
     }
-    fprintf(stderr, "Removing Context\n");
     struct FreeCell *curr = freeList;
     freeList = malloc(sizeof(struct FreeCell));
     freeList->obj = (void *) this;
@@ -563,7 +549,6 @@ void $collectWhite_FileList(struct FileList* this) {
       $collectWhite_FileList(this->tail_FileCons);
       break;
     }
-    fprintf(stderr, "Removing FileList\n");
     struct FreeCell *curr = freeList;
     freeList = malloc(sizeof(struct FreeCell));
     freeList->obj = (void *) this;
@@ -579,7 +564,6 @@ void $collectWhite_File(struct File* this) {
       $collectWhite_ExprList(this->exprs);
       break;
     }
-    fprintf(stderr, "Removing File\n");
     struct FreeCell *curr = freeList;
     freeList = malloc(sizeof(struct FreeCell));
     freeList->obj = (void *) this;
@@ -598,7 +582,6 @@ void $collectWhite_ExprList(struct ExprList* this) {
       $collectWhite_ExprList(this->tail_ExprCons);
       break;
     }
-    fprintf(stderr, "Removing ExprList\n");
     struct FreeCell *curr = freeList;
     freeList = malloc(sizeof(struct FreeCell));
     freeList->obj = (void *) this;
@@ -614,7 +597,6 @@ void $collectWhite_Expr(struct Expr* this) {
       $collectWhite_File(this->file);
       break;
     }
-    fprintf(stderr, "Removing Expr\n");
     struct FreeCell *curr = freeList;
     freeList = malloc(sizeof(struct FreeCell));
     freeList->obj = (void *) this;

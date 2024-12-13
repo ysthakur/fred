@@ -92,8 +92,7 @@ object Translator {
             }.mkString("\n")
       }
 
-      raw"""|fprintf(stderr, "Freeing ${typ.name}\n");
-            |$cases
+      raw"""|$cases
             |free($This);""".stripMargin
     }
   }
@@ -126,8 +125,7 @@ object Translator {
                          |    (void *) ${CollectWhite.name(typ)});
                          |}""".stripMargin
 
-      raw"""|fprintf(stderr, "Decrementing ${typ.name} (%p)\n", $This);
-            |if (--$This->rc == 0) {
+      raw"""|if (--$This->rc == 0) {
             |$deleteCases
             |  removePCR((void *) $This, $scc);
             |  free($This);
@@ -244,7 +242,6 @@ object Translator {
       raw"""|if ($This->color == kWhite) {
             |  $This->color = kBlack;
             |$rec
-            |  fprintf(stderr, "Removing ${typ.name}\n");
             |  struct FreeCell *curr = freeList;
             |  freeList = malloc(sizeof(struct FreeCell));
             |  freeList->obj = (void *) $This;

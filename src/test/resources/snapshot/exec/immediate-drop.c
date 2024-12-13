@@ -21,7 +21,6 @@ void $print_Foo(struct Foo* this);
 struct Foo* new$Foo();
 int main();
 void $free_Foo(struct Foo* this) {
-  fprintf(stderr, "Freeing Foo\n");
   switch (this->kind) {
   case Foo_tag:
     break;
@@ -29,7 +28,6 @@ void $free_Foo(struct Foo* this) {
   free(this);
 }
 void $decr_Foo(struct Foo* this) {
-  fprintf(stderr, "Decrementing Foo (%p)\n", this);
   if (--this->rc == 0) {
     switch (this->kind) {
     case Foo_tag:
@@ -76,7 +74,6 @@ void $collectWhite_Foo(struct Foo* this) {
     case Foo_tag:
       break;
     }
-    fprintf(stderr, "Removing Foo\n");
     struct FreeCell *curr = freeList;
     freeList = malloc(sizeof(struct FreeCell));
     freeList->obj = (void *) this;

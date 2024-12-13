@@ -21,7 +21,6 @@ void $collectWhite_Rec(struct Rec* this);
 void $print_Rec(struct Rec* this);
 struct Rec* new$Rec(struct Rec* rec);
 void $free_Rec(struct Rec* this) {
-  fprintf(stderr, "Freeing Rec\n");
   switch (this->kind) {
   case Rec_tag:
     break;
@@ -29,7 +28,6 @@ void $free_Rec(struct Rec* this) {
   free(this);
 }
 void $decr_Rec(struct Rec* this) {
-  fprintf(stderr, "Decrementing Rec (%p)\n", this);
   if (--this->rc == 0) {
     switch (this->kind) {
     case Rec_tag:
@@ -83,7 +81,6 @@ void $collectWhite_Rec(struct Rec* this) {
       $collectWhite_Rec(this->rec);
       break;
     }
-    fprintf(stderr, "Removing Rec\n");
     struct FreeCell *curr = freeList;
     freeList = malloc(sizeof(struct FreeCell));
     freeList->obj = (void *) this;

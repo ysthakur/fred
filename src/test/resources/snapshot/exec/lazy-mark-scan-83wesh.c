@@ -62,7 +62,6 @@ struct Foo* new$Foo(struct Bar* bar);
 struct Bar* new$Bar();
 int main();
 void $free_FooList(struct FooList* this) {
-  fprintf(stderr, "Freeing FooList\n");
   switch (this->kind) {
   case FooCons_tag:
     break;
@@ -72,7 +71,6 @@ void $free_FooList(struct FooList* this) {
   free(this);
 }
 void $free_Foo(struct Foo* this) {
-  fprintf(stderr, "Freeing Foo\n");
   switch (this->kind) {
   case Foo_tag:
     break;
@@ -80,7 +78,6 @@ void $free_Foo(struct Foo* this) {
   free(this);
 }
 void $free_Bar(struct Bar* this) {
-  fprintf(stderr, "Freeing Bar\n");
   switch (this->kind) {
   case Bar_tag:
     break;
@@ -88,7 +85,6 @@ void $free_Bar(struct Bar* this) {
   free(this);
 }
 void $decr_FooList(struct FooList* this) {
-  fprintf(stderr, "Decrementing FooList (%p)\n", this);
   if (--this->rc == 0) {
     switch (this->kind) {
     case FooCons_tag:
@@ -103,7 +99,6 @@ void $decr_FooList(struct FooList* this) {
   }
 }
 void $decr_Foo(struct Foo* this) {
-  fprintf(stderr, "Decrementing Foo (%p)\n", this);
   if (--this->rc == 0) {
     switch (this->kind) {
     case Foo_tag:
@@ -115,7 +110,6 @@ void $decr_Foo(struct Foo* this) {
   }
 }
 void $decr_Bar(struct Bar* this) {
-  fprintf(stderr, "Decrementing Bar (%p)\n", this);
   if (--this->rc == 0) {
     switch (this->kind) {
     case Bar_tag:
@@ -247,7 +241,6 @@ void $collectWhite_FooList(struct FooList* this) {
     case FooNil_tag:
       break;
     }
-    fprintf(stderr, "Removing FooList\n");
     struct FreeCell *curr = freeList;
     freeList = malloc(sizeof(struct FreeCell));
     freeList->obj = (void *) this;
@@ -263,7 +256,6 @@ void $collectWhite_Foo(struct Foo* this) {
       $collectWhite_Bar(this->bar);
       break;
     }
-    fprintf(stderr, "Removing Foo\n");
     struct FreeCell *curr = freeList;
     freeList = malloc(sizeof(struct FreeCell));
     freeList->obj = (void *) this;
@@ -278,7 +270,6 @@ void $collectWhite_Bar(struct Bar* this) {
     case Bar_tag:
       break;
     }
-    fprintf(stderr, "Removing Bar\n");
     struct FreeCell *curr = freeList;
     freeList = malloc(sizeof(struct FreeCell));
     freeList->obj = (void *) this;

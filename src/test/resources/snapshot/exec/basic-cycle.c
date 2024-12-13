@@ -44,7 +44,6 @@ struct Option* new$Some(struct List* value);
 struct List* new$List(struct Option* next, int value);
 int main();
 void $free_Option(struct Option* this) {
-  fprintf(stderr, "Freeing Option\n");
   switch (this->kind) {
   case None_tag:
     break;
@@ -54,7 +53,6 @@ void $free_Option(struct Option* this) {
   free(this);
 }
 void $free_List(struct List* this) {
-  fprintf(stderr, "Freeing List\n");
   switch (this->kind) {
   case List_tag:
     break;
@@ -62,7 +60,6 @@ void $free_List(struct List* this) {
   free(this);
 }
 void $decr_Option(struct Option* this) {
-  fprintf(stderr, "Decrementing Option (%p)\n", this);
   if (--this->rc == 0) {
     switch (this->kind) {
     case None_tag:
@@ -83,7 +80,6 @@ void $decr_Option(struct Option* this) {
   }
 }
 void $decr_List(struct List* this) {
-  fprintf(stderr, "Decrementing List (%p)\n", this);
   if (--this->rc == 0) {
     switch (this->kind) {
     case List_tag:
@@ -187,7 +183,6 @@ void $collectWhite_Option(struct Option* this) {
       $collectWhite_List(this->value_Some);
       break;
     }
-    fprintf(stderr, "Removing Option\n");
     struct FreeCell *curr = freeList;
     freeList = malloc(sizeof(struct FreeCell));
     freeList->obj = (void *) this;
@@ -203,7 +198,6 @@ void $collectWhite_List(struct List* this) {
       $collectWhite_Option(this->next);
       break;
     }
-    fprintf(stderr, "Removing List\n");
     struct FreeCell *curr = freeList;
     freeList = malloc(sizeof(struct FreeCell));
     freeList->obj = (void *) this;

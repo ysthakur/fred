@@ -24,7 +24,6 @@ struct List* new$Cons(struct List* next, int value);
 int fn$sum(struct List* list);
 int main();
 void $free_List(struct List* this) {
-  fprintf(stderr, "Freeing List\n");
   switch (this->kind) {
   case Nil_tag:
     break;
@@ -34,7 +33,6 @@ void $free_List(struct List* this) {
   free(this);
 }
 void $decr_List(struct List* this) {
-  fprintf(stderr, "Decrementing List (%p)\n", this);
   if (--this->rc == 0) {
     switch (this->kind) {
     case Nil_tag:
@@ -98,7 +96,6 @@ void $collectWhite_List(struct List* this) {
       $collectWhite_List(this->next_Cons);
       break;
     }
-    fprintf(stderr, "Removing List\n");
     struct FreeCell *curr = freeList;
     freeList = malloc(sizeof(struct FreeCell));
     freeList->obj = (void *) this;
