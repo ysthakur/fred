@@ -1,7 +1,6 @@
 package fred
 
 import scala.sys.process.*
-import java.nio.file.Paths
 import java.io.File
 
 import scopt.OParser
@@ -21,7 +20,7 @@ object Compiler {
   def main(args: Array[String]): Unit = {
     case class Options(
         inFile: Option[File] = None,
-        outExe: Option[String] = None,
+        outExe: String = "a.out",
         settings: Settings = Settings()
     )
 
@@ -32,8 +31,8 @@ object Compiler {
         programName("fred"),
         arg[File]("file").action((f, opts) => opts.copy(inFile = Some(f)))
           .text("Input file"),
-        opt[String]('o', "out").action((f, opts) => opts.copy(outExe = Some(f)))
-          .text("Output executable"),
+        opt[String]('o', "out").action((f, opts) => opts.copy(outExe = f))
+          .text("Output executable (default: a.out)"),
         opt[Unit]("lazy-mark-scan-only").action((_, opts) =>
           opts.copy(settings = opts.settings.copy(rcAlgo = RcAlgo.LazyMarkScan))
         ).text("Use base lazy mark scan algorithm instead of my cool one :(")
@@ -45,7 +44,7 @@ object Compiler {
         val code =
           try codeSource.mkString
           finally codeSource.close()
-        Compiler.compile(code, opts.outExe.get, settings = opts.settings)
+        Compiler.compile(code, opts.outExe, settings = opts.settings)
       case None =>
     }
   }
@@ -70,9 +69,13 @@ object Compiler {
   }
 
   def invokeGCC(generated: String, outExe: String, settings: Settings): Unit = {
+    val runtimeHeader = this.getClass().getClassLoader()
+      .getResourceAsStream(RuntimeHeader)
     val io = ProcessIO(
       in => {
-        in.write(generated.getBytes())
+        in.write(runtimeHeader.readAllBytes())
+        // TODO removing #include runtime.h is a horrendous hack
+        in.write(generated.replaceAll("#include \"runtime.h\"", "").getBytes())
         in.close()
       },
       out => print(String(out.readAllBytes())),
@@ -82,16 +85,8 @@ object Compiler {
     val extraIncludes =
       if (settings.includeMemcheck) "-I /usr/include/valgrind" else ""
 
-    assert(
-      s"gcc -I ${includesFolder()} $extraIncludes -o $outExe -x c -".run(io)
-        .exitValue() == 0
-    )
-  }
+    assert(s"gcc $extraIncludes -o $outExe -x c -".run(io).exitValue() == 0)
 
-  /** Path to the folder with header files to include */
-  private def includesFolder(): String = {
-    val runtimeFile = this.getClass().getClassLoader()
-      .getResource(RuntimeHeader).toURI()
-    Paths.get(runtimeFile).getParent().toString()
+    runtimeHeader.close()
   }
 }
