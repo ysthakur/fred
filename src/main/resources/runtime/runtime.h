@@ -4,6 +4,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <time.h>
 
 enum Color
 {
@@ -185,4 +186,12 @@ void processAllPCRs()
     free(pcrBuckets);
     pcrBuckets = next;
   }
+}
+
+// From https://stackoverflow.com/a/14783909/11882002
+static inline u_int64_t rdtscp() {
+  u_int64_t rax,rdx;
+  u_int32_t aux;
+  asm volatile ( "rdtscp\n" : "=a" (rax), "=d" (rdx), "=c" (aux) : : );
+  return (rdx << 32) + rax;
 }

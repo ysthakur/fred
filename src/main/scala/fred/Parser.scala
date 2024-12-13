@@ -15,7 +15,8 @@ object Parser {
   }
 
   private object ParserHelpers {
-    val comment = (P.string("//") *> P.repUntil0(P.anyChar.void, crlf | lf)).void
+    val comment = (P.string("//") *> P.repUntil0(P.anyChar.void, crlf | lf))
+      .void
     val ws: P0[Unit] = (sp | crlf | lf | comment).rep0.void
 
     extension [A](p1: P[A])
@@ -71,10 +72,12 @@ object Parser {
       case (num, end) => IntLiteral(num.toInt, Span(end - num.length, end))
     }.withContext("int literal")
     val stringLiteral: P[StringLiteral] = spanned(
-      P.char('"') *> ((P.char('\\') ~ P.anyChar) | (P.charWhere(_ != '"'))).rep
+      P.char('"') *> ((P.char('\\') *> P.anyChar) | (P.charWhere(_ != '"'))).rep
         .string <* P.char('"')
-    ).map { case Spanned(text, span) => StringLiteral(text, span) }
-      .withContext("str literal")
+    ).map { case Spanned(text, span) =>
+      // TODO make this work with multiple backslashes and stuff
+      StringLiteral(text.replace("\\\"", "\"").replace(raw"\\", "\\"), span)
+    }.withContext("str literal")
     val literal = intLiteral | stringLiteral
     val parenExpr = inParens(expr).withContext("paren expr")
     val varRefOrFnCallOrCtorCall =

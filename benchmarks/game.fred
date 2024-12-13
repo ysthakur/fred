@@ -1,0 +1,50 @@
+data Player = Player {
+  mut friends: PlayerList,
+  store: Store
+}
+
+data PlayerList
+  = PlayerNil {}
+  | PlayerCons {
+    player: Player,
+    next: PlayerList
+  }
+
+data Store = Store { datums: Data }
+
+data Data
+  = DataCons {
+    value: int,
+    // This is mut only so the compiler thinks there can be a cycle at runtime
+    mut next: Data
+  }
+  | DataNil {}
+
+fn createDummyData(length: int): Data =
+  if length == 0 then DataNil {}
+  else DataCons { value: length, next: createDummyData(length - 1) }
+
+fn createPlayers(n: int, store: Store): PlayerList =
+  if n == 0 then PlayerNil {}
+  else
+    let player = Player { friends: PlayerNil {}, store: store } in
+    let next = createPlayers(n - 1, store) in
+    set player.friends PlayerCons { player: player, next: next };
+    player.friends
+
+fn pointlessLoop(iters: int): int =
+  if iters == 0 then 0
+  else
+    createPlayers(1000, Store { datums: createDummyData(10000) });
+    c("processAllPCRs();");
+    pointlessLoop(iters - 1)
+
+fn main(): int =
+  printf("Starting game benchmark\n");
+  c("float clockStart = (float) clock()/CLOCKS_PER_SEC;");
+  c("u_int64_t tscStart = rdtscp();");
+  pointlessLoop(5000);
+  c("printf(
+      \"Time stamp counter diff: %ld, clock diff: %lf\",
+      rdtscp() - tscStart,
+      ((float) clock()/CLOCKS_PER_SEC) - clockStart);")

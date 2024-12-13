@@ -15,6 +15,8 @@ lazy val root = project
 
     scalacOptions ++= Seq("-Wunused:all", "-deprecation"),
 
+    assembly / assemblyOutputPath := file("./fred.jar"),
+
     libraryDependencies ++= Seq(
       "org.typelevel" %% "cats-parse" % "0.3.9",
       "com.github.scopt" %% "scopt" % "4.1.0",

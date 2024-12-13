@@ -31,3 +31,5 @@ sbt-launch.jar
 /.worksheet/
 
 a.out
+bench.bin
+fred.jar
