@@ -1,8 +1,23 @@
+#set document(title: [CMSC499 writeup - Yash Thakur])
+#set heading(numbering: "1.")
+#show link: underline
+
+#align(center + horizon)[
+  #text(2em)[*Making lazy mark scan a bit faster by avoiding scanning some objects based on their type*]
+
+  #text(1.2em)[Yash Thakur]
+
+  CMSC499
+
+  12/13/2024
+]
+
+#pagebreak()
 #outline(indent: 0.75em)
 
 = Introduction
 
-One major problem with reference counting is the fact that it cannot free objects that are involved in reference cycles. Lazy mark scan is a cyclic reference counting algorithm that aims to fix this issue, but it requires traversing all objects reachable from any potential cyclic roots @lazy_mark_scan. This write-up describes a way to reduce the number of objects traversed by applying information about types known at compile-time. My project involved creating a language #smallcaps[fred] and implementing a runtime for it that takes advantage of this optimization.
+One major problem with reference counting is the fact that it cannot free objects that are involved in reference cycles. Lazy mark scan is a cyclic reference counting algorithm that aims to fix this issue, but it requires traversing all objects reachable from any potential cyclic roots @lazy_mark_scan. This write-up describes a way to reduce the number of objects traversed by applying information about types known at compile-time. My project involved creating a language #smallcaps[Fred] and implementing a runtime for it that takes advantage of this optimization.
 
 = Background
 
@@ -26,21 +41,21 @@ In a statically typed language, some guarantees can be made about whether or not
 
 Fewer guarantees can be made if the type system in question includes subtyping or something, but this project only looks at a very simple language, with no subtyping, polymorphism, dependent types, closures, or other bells and whistles.
 
-#smallcaps[fred]'s user-defined types are only algebraic data types, I think they're called? They're tagged unions of product types. And rather than assume every field is mutable, fields need to be marked mutable explicitly. Immutability isn't central to my project, but it does give us some extra knowledge to avoid more scanning.
+#smallcaps[Fred]'s user-defined types are only algebraic data types, I think they're called? They're tagged unions of product types. And rather than assume every field is mutable, fields need to be marked mutable explicitly. Immutability isn't central to my project, but it does give us some extra knowledge to avoid more scanning.
 
 This makes it easy to represent all the types in a program as a directed graph where the nodes are types. The fields inside every type can be represented as edges going from that type to the type of the field.
 
 Now that we have a graph of types, we can see that two objects `a` and `b` (not necessarily distinct) of types `A` and `B`, respectively, can only form a cycle if:
 - `A` and `B` form a cycle,
-- AND somewhere along the path from `A` to `B` or `B` to `A`, there's a mutable field.
+- and somewhere along the path from `A` to `B` or `B` to `A`, there's a mutable field.
 
-Although I may be lazy, #smallcaps[fred] is not, and so there is currently no way to create cycles using only immutable fields. I don't feel like proving this or Googling for existing proofs of it.
+Although I may be lazy, #smallcaps[Fred] is not, and so there is currently no way to create cycles using only immutable fields. I don't feel like proving this or Googling for existing proofs of it.
 
 Now that we know that certain objects cannot form cycles with certain other objects, we can apply this knowledge at runtime. When recursively scanning the objects reachable from a PCR, every time we come across some object, we can avoid scanning those of its children that can never form a cycle with that object (based on their types). We will also only add an object to the list of PCRs in the first place if it's possible for that object to be part of a cycle (note the two rules above).
 
 == Quadratic scanning problem
 
-However, if done naively, this can result in garbage not being found in a single sweep of the list of PCRs @morris_chang_cyclic_2012. A quick fix for this would be to go over the list of PCRs multiple times until all garbage is gone, but this makes cycle collection quadratic in the number of objects.
+However, if done naively, this can result in not all garbage being collected in a single sweep of the list of PCRs @morris_chang_cyclic_2012. A quick fix for this would be to go over the list of PCRs multiple times until all garbage is gone, but this makes cycle collection quadratic in the number of objects.
 
 Below, I will give some example code that triggers this problem. Suppose you are creating a compiler and you have the following types. You can have `Context -> FileList -> Context` cycles, as well as `File -> ExprList -> Expr -> File` cycles.
 
@@ -123,16 +138,18 @@ As a bonus, grouping objects by SCC and processing them separately also lets us 
 
 = Implementation
 
-#smallcaps[fred] was created to try out this algorithm. The implementation can be found at https://github.com/ysthakur/fred. The language uses automatic reference counting and is compiled to C. Partly because it is compiled to C and partly because I made it, it involves copious amounts of jank. When I have time after finals, I will try to get rid of some of this awfulness, as well as document my code better, but in the meantime, #smallcaps[fred] is mostly functional (functional as in alcoholic).
+#smallcaps[Fred] was created to try out this algorithm. The implementation can be found at https://github.com/ysthakur/Fred. The language uses automatic reference counting and is compiled to C. Partly because it is compiled to C and partly because I made it, it involves copious amounts of jank. When I have time after finals, I will try to get rid of some of this awfulness, as well as document my code better, but in the meantime, #smallcaps[Fred] is mostly functional (functional as in alcoholic).
 
 = Future work
 
 #bibliography("writeup-bib.bib")
 
-= Why name it #smallcaps[fred]?
+#heading(numbering: none)[
+  Why name it #smallcaps[Fred]?
+]
 
 I was going to name it Foo, but there's already an esolang by that name that's fairly well-known (by esolang standards). So I went to the Wikipedia page on metasyntactic variables and picked "fred." I figured that if I needed to, I could pretend that it was something meaningful, like maybe an acronym or the name of a beloved childhood pet.
 
-I could maybe say that when I was young, I had a cute little hamster called Freddie Krueger, so named because of the striped red sweater my grandmother had knitted for him, as well as his proclivity for murdering small children. In his spare time, Fred would exercise on his hamster wheel, or as he liked to call it, his Hamster Cycle.
+For example, I could say that when I was young, I had a cute little hamster called Freddie Krueger, so named because of the striped red sweater my grandmother had knitted for him, as well as his proclivity for murdering small children. In his spare time, Fred would exercise on his hamster wheel, or as he liked to call it, his Hamster Cycle.
 
 But one day, I came home to find Fred lying on the hamster cycle, unresponsive. The vet said that he'd done too much running and had had a heart attack. I was devastated. It was then that I decided that, to exact my revenge on the cycle that killed Fred, I would kill all cycles.
