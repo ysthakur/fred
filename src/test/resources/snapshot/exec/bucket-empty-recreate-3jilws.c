@@ -274,13 +274,13 @@ int main() {
   v0->self = new$SomeFoo(v0);
   v0->self->rc ++;
   $decr_OptFoo(oldValue$1);
-  processAllPCRs();
   drop((void *) v0->self, (void *) $decr_OptFoo);
+  processAllPCRs();
+  0;
   struct OptFoo* oldValue$2 = v0->self;
   v0->self = new$SomeFoo(v1);
   v0->self->rc ++;
   $decr_OptFoo(oldValue$2);
-  0;
   drop((void *) v0->self, (void *) $decr_OptFoo);
   int ret$3 = 0;
   $decr_Foo(v1);

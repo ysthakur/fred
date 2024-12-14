@@ -504,8 +504,6 @@ object Translator {
         case BinExpr(lhs, op, rhs, typ) =>
           val (lhsSetup, lhsTranslated, lhsTeardown) = exprToC(lhs)
           val (rhsSetup, rhsTranslated, rhsTeardown) = exprToC(rhs)
-          val setup = s"$lhsSetup\n$rhsSetup"
-          val teardown = s"$lhsTeardown\n$rhsTeardown"
           if (op.value == BinOp.Seq) {
             val execLhs = typer.types(lhs) match {
               case td: TypeDef if !lhs.isInstanceOf[SetFieldExpr] =>
@@ -516,9 +514,17 @@ object Translator {
                   case _ => s"$lhsTranslated;"
                 }
             }
-            (s"$setup\n$execLhs", rhsTranslated, teardown)
+            (
+              s"$lhsSetup\n$execLhs\n$lhsTeardown\n$rhsSetup",
+              rhsTranslated,
+              rhsTeardown
+            )
           } else {
-            (setup, s"$lhsTranslated ${op.value.text} $rhsTranslated", teardown)
+            (
+              s"$lhsSetup\n$rhsSetup",
+              s"$lhsTranslated ${op.value.text} $rhsTranslated",
+              s"$lhsTeardown\n$rhsTeardown"
+            )
           }
         case letExpr @ LetExpr(name, value, body, _) =>
           val (valueSetup, valueToC, valueTeardown) = exprToC(value)

@@ -798,14 +798,14 @@ int main() {
   file->exprs = new$ExprCons(expr, file->exprs);
   file->exprs->rc ++;
   $decr_ExprList(oldValue$1);
+  drop((void *) file->exprs, (void *) $decr_ExprList);
+  $decr_Expr(expr);
   struct Context* oldValue$2 = ctx->ref;
   ctx->ref = new$Context(new$FileNil(), "other context");
   ctx->ref->rc ++;
   $decr_Context(oldValue$2);
-  drop((void *) file->exprs, (void *) $decr_ExprList);
   drop((void *) ctx->ref, (void *) $decr_Context);
   int ret$3 = 0;
-  $decr_Expr(expr);
   $decr_Context(actualCtx);
   $decr_File(file);
   $decr_CtxRef(ctx);
