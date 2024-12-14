@@ -25,7 +25,9 @@ object Translator {
       case RcAlgo.LazyMarkScan => Cycles(
           List(file.typeDefs.toSet),
           file.typeDefs.map(_ -> 0).toMap,
-          Set.empty
+          // TODO it's possible that there aren't any cycles possible in the
+          // whole program, make this an empty set in that case
+          Set(0)
         )
       case RcAlgo.Mine => Cycles.fromFile(file)
     }
