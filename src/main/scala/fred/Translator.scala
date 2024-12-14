@@ -544,9 +544,9 @@ object Translator {
             exprToC(body)(using newBindings)
 
           (
-            s"$valueSetup\n$letSetup\n$bodySetup",
+            s"$valueSetup\n$letSetup\n$valueTeardown\n$bodySetup",
             bodyToC,
-            s"$valueTeardown\n$bodyTeardown\n$letTeardown"
+            s"$bodyTeardown\n$letTeardown"
           )
         case IfExpr(cond, thenBody, elseBody, _) =>
           val (condSetup, condC, condTeardown) = exprToC(cond)

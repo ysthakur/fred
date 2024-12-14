@@ -96,6 +96,13 @@ void $decr_FooList(struct FooList* this) {
     }
     removePCR((void *) this, 0);
     free(this);
+  } else {
+    addPCR(
+      (void *) this,
+      0,
+      (void *) $markGray_FooList,
+      (void *) $scan_FooList,
+      (void *) $collectWhite_FooList);
   }
 }
 void $decr_Foo(struct Foo* this) {
@@ -107,6 +114,13 @@ void $decr_Foo(struct Foo* this) {
     }
     removePCR((void *) this, 0);
     free(this);
+  } else {
+    addPCR(
+      (void *) this,
+      0,
+      (void *) $markGray_Foo,
+      (void *) $scan_Foo,
+      (void *) $collectWhite_Foo);
   }
 }
 void $decr_Bar(struct Bar* this) {
@@ -117,6 +131,13 @@ void $decr_Bar(struct Bar* this) {
     }
     removePCR((void *) this, 0);
     free(this);
+  } else {
+    addPCR(
+      (void *) this,
+      0,
+      (void *) $markGray_Bar,
+      (void *) $scan_Bar,
+      (void *) $collectWhite_Bar);
   }
 }
 void $markGray_FooList(struct FooList* this) {
