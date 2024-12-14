@@ -16,9 +16,9 @@ let v0 = $"T0 { cyclic: NoneT0 {} }"
 print (1..<$numTypes | reduce -f $v0 {|t, acc| $"T($t) { cyclic: NoneT($t) {}, f: ($acc) }" })
 
 print $"fn triggerDecrs\(v: T($numTypes - 1)): int ="
-for type in 0..<$numTypes {
-  let ref = 0..<$type | each { ".f" } | str join
-  print $"\(let temp($type) = v($ref) in 0);"
+for nesting in 0..<$numTypes {
+  let ref = 0..<$nesting | each { ".f" } | str join
+  print $"\(let temp($nesting) = v($ref) in 0);"
 }
 print "0"
 

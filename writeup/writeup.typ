@@ -140,6 +140,77 @@ As a bonus, grouping objects by SCC and processing them separately also lets us 
 
 #smallcaps[Fred] was created to try out this algorithm. The implementation can be found at https://github.com/ysthakur/Fred. The language uses automatic reference counting and is compiled to C. Partly because it is compiled to C and partly because I made it, it involves copious amounts of jank. When I have time after finals, I will try to get rid of some of this awfulness, as well as document my code better, but in the meantime, #smallcaps[Fred] is mostly functional (functional as in alcoholic).
 
+= Benchmarks
+
+I would like to preface this section by noting that it is complete bogus and that you can safely skip it. These benchmarks should not be taken as evidence of anything. Apologies in advance for that. Nevertheless, I have used these benchmarks to convince myself that my algorithm is vastly superior to the base lazy mark scan algorithm. Feel free to do the same.
+
+I have two benchmarks at the moment. They can be found in the #link("https://github.com/ysthakur/fred/tree/main/benchmarks")[`benchmarks`] folder.
+
+The benchmarks work by running a piece of code a bunch of times, then looking at how much the processor's timestamp counter increased (using `rdtscp`) as well as the processor time (using `clock()`). Since within each benchmark, the code being timed is run lots of times, I only recorded the times after running each benchmark program once, rather than running each program multiple times and noting the mean and range.
+
+== `game.fred`
+
+#link("https://github.com/ysthakur/fred/blob/main/benchmarks/game.fred")[Here's the code]. This program is supposed to be a game, except it does basically nothing. It demonstrates a case where normal lazy mark scan will unnecessarily scan a bunch of objects, but my algorithm won't.
+
+It has the following types:
+```kotlin
+data Player
+  = Player { store: Store }
+  // This exists only to make the compiler think that Player can be involved in cycles
+  | PlayerCyclic {
+    mut player: Player
+  }
+data Store = Store { datums: Data }
+data Data
+  = DataCons {
+    value: int,
+    // This is mut only so the compiler thinks there can be a cycle at runtime
+    mut next: Data
+  }
+  | DataNil {}
+```
+
+`Store` represents some kind of shared state or resources or something that all `Player` objects have a reference to. This sort of thing is probably more common in Java than in a functional language, but whatever.
+
+This is what `game.fred` does:
+1. Create a ginormous `Store` object
+2. Do the following 50,000 times:
+  1. Create a `Player` object
+  2. Increment and decrement its refcount so that it's added to the list of PCRs
+  3. Invoke `processAllPCRs()`
+
+The `processAllPCRs()` call above will cause the `Player` object to be scanned. When it's scanned, with my algorithm, the `Store` object won't be scanned, because it's in a separate SCC. But with base lazy mark scan, the `Store` object will have to be scanned, so it will be slower.
+
+Here are the results:
+#table(
+  columns: (auto, auto, auto),
+  table.header([Lazy mark scan only?], [Timestamp counter], [Clock (s)]),
+  [No], [74647376], [0.028586],
+  [Yes], [29478684752], [11.289244]
+)
+
+I'd go into how my algorithm is orders of magnitude faster than base lazy mark scan, but this benchmark means basically nothing. The only thing it really tells you is that there can be cases where my algorithm is faster than lazy mark scan, but even calculations on a blackboard would've told you that. This benchmark doesn't help one get a sense of how much faster my algorithm would be in general.
+
+== `stupid.fred`
+
+If the previous benchmark wasn't artificial enough for you, this one definitely will be. I wanted to come up with something where my algorithm would perform worse than base lazy mark scan. This can happen if the overhead from inserting PCRs into the right bucket (sorted) is too high. You need to have a bunch of SCCs, and you need to often have objects from higher SCCs being added to the list of PCRs after objects from lower SCCs.
+
+This is actually a situation that probably isn't uncommon in real codebases. If you have some long-lived object that's passed around everywhere, you probably have references to it being created all the time. I do believe escape analysis would help with/fix many, if not most of those cases, though. Removing a PCR every time its refcount is incremented could also help here, although that has tradeoffs.
+
+I, unfortunately, couldn't come up with a decent example, so I wrote a script to do it for me. The script first generates 200 types. Each type $T_(i+1)$ has a field of type $T_i$. The script then generates an object of type $T_199$. Then it goes from $T_199$ down to $T_0$, adding objects to the list of PCRs. With base lazy mark scan, adding PCRs is a constant time operation, but with my algorithm, it's linear time, since an object of type $T_i$ here would have to go through $199 - i$ objects first.
+
+All of the stuff described above is then run 50,000 times. Here are the results:
+#table(
+  columns: (auto, auto, auto),
+  table.header([Lazy mark scan only?], [Timestamp counter], [Clock (s)]),
+  [No], [27741037106], [10.623692],
+  [Yes], [11054113602], [4.233204]
+)
+
+Again, all this tells you is that there are some cases where my algorithm can do worse than lazy mark scan.
+
+= Conclusion
+
 = Future work
 
 #bibliography("writeup-bib.bib")
