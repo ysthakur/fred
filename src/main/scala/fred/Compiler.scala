@@ -4,6 +4,8 @@ import scala.sys.process.*
 import java.io.File
 
 import scopt.OParser
+import java.nio.file.Files
+import java.nio.file.Path
 
 object Compiler {
   private val RuntimeHeader = "runtime/runtime.h"
@@ -65,6 +67,7 @@ object Compiler {
           throw new AssertionError("Shouldn't get here")
       }
     val generatedC = Translator.toC(parsedFile, settings = settings)
+    Files.write(Path.of("out.c"), generatedC.getBytes())
     invokeGCC(generatedC, outExe, settings)
   }
 

@@ -30,18 +30,23 @@ fn createAndDeletePlayers(n: int, store: Store): int =
     c("processAllPCRs();");
     createAndDeletePlayers(n - 1, store)
 
-fn pointlessLoop(iters: int): int =
+fn pointlessLoop(iters: int, store: Store): int =
   if iters == 0 then 0
   else
-    createAndDeletePlayers(5000, Store { datums: createDummyData(10000) });
+    createAndDeletePlayers(10, store);
     c("processAllPCRs();");
-    pointlessLoop(iters - 1)
+    pointlessLoop(iters - 1, store)
+
+fn run(): int =
+  let store = Store { datums: createDummyData(1000) } in
+  pointlessLoop(50000, store);
+  c("processAllPCRs();")
 
 fn main(): int =
   printf("Starting game benchmark\n");
   c("float clockStart = (float) clock()/CLOCKS_PER_SEC;");
   c("u_int64_t tscStart = rdtscp();");
-  pointlessLoop(10000);
+  run();
   c("printf(
       \"Time stamp counter diff: %ld, clock diff: %lf\",
       rdtscp() - tscStart,
