@@ -551,14 +551,18 @@ object Translator {
           val setup = s"""|$condSetup
                           |$typ $resVar;
                           |if ($condC) {
+                          |${indent(1)(condTeardown)}
                           |${indent(1)(thenSetup)}
                           |  $resVar = $thenC;
+                          |${indent(1)(thenTeardown)}
                           |} else {
+                          |${indent(1)(condTeardown)}
                           |${indent(1)(elseSetup)}
                           |  $resVar = $elseC;
+                          |${indent(1)(elseTeardown)}
                           |}""".stripMargin
 
-          (setup, resVar, condTeardown)
+          (setup, resVar, "")
         case FieldAccess(obj, field, _) =>
           val (objSetup, objToC, objTeardown) = exprToC(obj)
           (objSetup, s"$objToC->${field.value}", objTeardown)
