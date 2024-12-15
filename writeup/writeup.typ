@@ -146,11 +146,21 @@ As a bonus, grouping objects by SCC and processing them separately also lets us 
 
 = Implementation
 
-#smallcaps[Fred] was created to try out this algorithm. The implementation can be found at https://github.com/ysthakur/Fred. The language uses automatic reference counting and is compiled to C. Partly because it is compiled to C and partly because I made it, it involves copious amounts of jank. When I have time after finals, I will try to get rid of some of this awfulness, as well as document my code better, but in the meantime, #smallcaps[Fred] is mostly functional (functional as in alcoholic).
+#smallcaps[Fred] was created to try out this algorithm. The implementation can be found at https://github.com/ysthakur/fred. The language uses automatic reference counting and is compiled to C. Partly because it is compiled to C and partly because I made it, it involves copious amounts of jank. When I have time, I will try to get rid of some of this awfulness, as well as document my code better, but in the meantime, #smallcaps[Fred] is mostly functional (not functional like Haskell, functional like an alcoholic).
+
+PCRs are stored in buckets. Each bucket stores PCRs from only one SCC. These buckets are stored in a linked list, and they are kept in sorted order according to their SCC. Note: while writing this report, I switched to using an array for performance reasons (discussed in @stupid_benchmark).
+
+There's a `runtime.h` header file that does all the PCR stuff. It contains `addPCR`, `removePCR`, and `processAllPCRs` functions.
+
+When an object's refcount is decremented and it doesn't hit 0, it's added to the list of PCRs using `addPCR` and its `addedPCR` is set to true. The next time the object's refcount is decremented, if `addedPCR` is true, there won't be any need to call `addPCR`.
+
+`processAllPCRs` iterates over all the PCR buckets and runs lazy mark scan on each bucket individually. When it's done, all PCRs and all PCR buckets are freed.
+
+`processAllPCRs` buckets is only called at the end of the `main` function. In real life, you'd want to throw in a check every time you allocate a new object or something that determines whether or not to collect cycles, but calling `processAllPCRs` only at the end of the program was good enough for the short programs I was testing. The user can still insert calls to `processAllPCRs` wherever they want.
 
 = Benchmarks
 
-I would like to preface this section by noting that it is complete bogus and that you can safely skip it. These benchmarks should not be taken as evidence of anything. Apologies in advance for that. Nevertheless, I have used these benchmarks to convince myself that my algorithm is vastly superior to the base lazy mark scan algorithm. Feel free to do the same.
+I would like to preface this section by noting that it is complete bogus and that you can safely skip it. Nevertheless, I have used these benchmarks to convince myself that my algorithm is vastly superior to the base lazy mark scan algorithm. Feel free to do the same.
 
 I have two benchmarks at the moment. They can be found in the #link("https://github.com/ysthakur/fred/tree/main/benchmarks")[`benchmarks`] folder.
 
@@ -192,32 +202,35 @@ The `processAllPCRs()` call above will cause the `Player` object to be scanned. 
 Here are the results:
 #table(
   columns: (auto, auto, auto),
+  align: (right, right, right),
   table.header([Lazy mark scan only?], [Timestamp counter], [Clock (s)]),
   [No], [74647376], [0.028586],
   [Yes], [29478684752], [11.289244]
 )
 
-I'd go into how my algorithm is orders of magnitude faster than base lazy mark scan, but this benchmark means basically nothing. The only thing it really tells you is that there can be cases where my algorithm is faster than lazy mark scan, but even calculations on a blackboard would've told you that. This benchmark doesn't help one get a sense of how much faster my algorithm would be in general.
+I'd go into how my algorithm is orders of magnitude faster than base lazy mark scan, but this benchmark means basically nothing. I can tune the results by changing the size of the `Store` or the number of `Player` objects created. The only thing it really tells you is that there can be cases where my algorithm is faster than lazy mark scan.
 
-== `stupid.fred`
+== `stupid.fred` <stupid_benchmark>
 
 If the previous benchmark wasn't artificial enough for you, this one definitely will be. I wanted to come up with something where my algorithm would perform worse than base lazy mark scan. This can happen if the overhead from inserting PCRs into the right bucket (sorted) is too high. You need to have a bunch of SCCs, and you need to often have objects from higher SCCs being added to the list of PCRs after objects from lower SCCs. This is a situation that probably isn't uncommon in real codebases.
 
-But I realized when writing this report that this isn't an actual problem. It just happens with my specific implementation. The number of SCCs will always be low, so the runtime can simply allocate an array holding all the PCR buckets at the very beginning of the program. When adding a new PCR, we can index into this array using the PCR's SCC. Adding PCRs now becomes a constant-time operation.
-
-Nevertheless, I went to the effort of making this benchmark, so I'll leave this bit in. I couldn't actually come up with a decent example, so I wrote a script to do it for me. The script first generates 200 types. Each type $T_(i+1)$ has a field of type $T_i$. The script then generates an object of type $T_199$. Then it goes from $T_199$ down to $T_0$, adding objects to the list of PCRs. With base lazy mark scan, adding PCRs is a constant time operation, but with my algorithm, it's linear time, since an object of type $T_i$ here would have to go through $199 - i$ objects first.
+I couldn't actually come up with a decent example, so I wrote a script to do it for me. The script first generates 200 types. Each type $T_(i+1)$ has a field of type $T_i$. The script then generates an object of type $T_199$. Then it goes from $T_199$ down to $T_0$, adding objects to the list of PCRs. With base lazy mark scan, adding PCRs is a constant time operation, but with my algorithm, it's linear time, since an object of type $T_i$ here would have to go through $199 - i$ objects first.
 
 All of the stuff described above is then run 50,000 times. Here are the results:
 #table(
   columns: (auto, auto, auto),
+  align: (right, right, right),
   table.header([Lazy mark scan only?], [Timestamp counter], [Clock (s)]),
   [No], [27741037106], [10.623692],
   [Yes], [11054113602], [4.233204]
 )
 
-After using an array like I mentioned above, I ran the stupid benchmark again. Now, both algorithms have about the same performance!
+But I realized when writing this report that this problem only happens with my specific implementation. The PCR buckets can be held in an array rather than a linked list. The number of SCCs is known statically and will always be low, so this is fine. When adding a new PCR, we can index into this array using the PCR's SCC. Adding PCRs now becomes a constant-time operation.
+
+After making this modification, I ran the stupid benchmark again. Now, both algorithms have about the same performance!
 #table(
   columns: (auto, auto, auto),
+  align: (right, right, right),
   table.header([Lazy mark scan only?], [Timestamp counter], [Clock (s)]),
   [No], [8890733476], [3.404776],
   [Yes], [10184751983], [3.900381]
@@ -233,7 +246,11 @@ I worry that this algorithm isn't actually sound. It would be nice to prove usin
 
 == Applying this to newer algorithms
 
-The papers I was working off are pretty old. I'd like
+The papers I was working off are pretty old. My implementation was built on top of the original lazy mark scan algorithm, even though cycle collection for reference counting has come a long way since. Even back in 2001, @java_without_coffee_breaks had a complicated concurrent cycle collector, and I have no idea if my stuff applies there. If newer algorithms can't be improved using the stuff I talked about here, then my project won't have been very useful.
+
+== Adding this to existing languages
+
+There's nothing special about #smallcaps[Fred] as a language, and so the compiler optimizations and runtime worked on here can be applied to an existing compiled language. Such a language would have plenty of code available already, and this could be used for creating more meaningful benchmarks than the ones I made above.
 
 = Why name it #smallcaps[Fred]?
 
@@ -242,6 +259,5 @@ I was going to name it Foo, but there's already an esolang by that name that's f
 For example, I could say that when I was young, I had a cute little hamster called Freddie Krueger, so named because of the hamster-sized striped red sweater my grandmother had knitted for him, as well as his proclivity for murdering small children. In his spare time, Fred would exercise on his hamster wheel, or as he liked to call it, his Hamster Cycle.
 
 But one day, I came home to find Fred lying on the hamster cycle, unresponsive. The vet said that he'd done too much running and had had a heart attack. I was devastated. It was then that I decided that, to exact my revenge on the cycle that killed Fred, I would kill all cycles.
-
 
 #bibliography("writeup-bib.bib")
