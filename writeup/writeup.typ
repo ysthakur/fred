@@ -101,7 +101,7 @@ After running that code, this is what the graph of objects looks like:
   #image("img/quadratic_scanning_example.png", height: 40%)
 ]
 
-The green edges in the diagram above are references that are known not to introduce any cycles. Therefore, when doing mark-scan, we will not follow them (this is our modification from the previous section, not part of lazy mark scan). There are other references that don’t cause cycles in there, but we can't know this at compile-time. I'm going to call these green edges "innocent", because I don't know what sort of terms are actually used for them by real researchers.
+The green edges in the diagram above are references that are known not to introduce any cycles. Therefore, when doing mark-scan, we will not follow them (this is our modification from the previous section, not part of lazy mark scan). There are other references that don’t cause cycles in there, but we can't know this at compile-time.
 
 At some point, the variables `ctx`, `file`, and `expr` will go out of scope, so the `Context`, `File`, and `Expr` objects will all have their refcounts decremented before being added to the list of PCRs. All the objects in the diagram above have become garbage and are eagerly waiting to be freed.
 
@@ -121,11 +121,11 @@ Let's trace what our naively modified lazy mark scan algorithm would do here:
 
 `File` lives because it has a reference from the `FileCons` object, and it keeps the rest of the bottom cycle alive. Thus, all the scanning we did on the bottom cycle was in vain. We'll have to go back and re-scan the `File` object.
 
-Therefore, it is not enough to simply not traverse innocent edges. Fortunately, the solution to this is pretty simple.
+Therefore, it is not enough to simply not traverse known acyclic edges. Fortunately, the solution to this is pretty simple.
 
 == Fixing the quadratic scanning problem
 
-You may notice above that because we don't traverse innocent edges, processing the `Context` object happens completely separately from processing the `File` and `Expr` objects. We could have processed the `Context` object first, found it to be garbage, decremented the `File` object's reference count, and then processed the `File` and `Expr` objects together. This way, all of the objects would have been marked as garbage without processing any PCR multiple times.
+You may notice above that because we don't traverse references known not to cause cycles, processing the `Context` object happens completely separately from processing the `File` and `Expr` objects. We could have processed the `Context` object first, found it to be garbage, decremented the `File` object's reference count, and then processed the `File` and `Expr` objects together. This way, all of the objects would have been marked as garbage without processing any PCR multiple times.
 
 In general, how do we determine which objects should be processed before which objects? We can do this based on which objects can reference which objects (directly or indirectly). A `Context` object can refer to `File` and `Expr` objects, so it must be processed before them. `File` and `Expr` objects can both refer to each other, so they must be processed together.
 
