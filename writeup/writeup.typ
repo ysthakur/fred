@@ -21,27 +21,27 @@ One major problem with reference counting is the fact that it cannot free object
 
 = Background
 
-Leo, you can probably skip/skim these first couple sections, they mostly just exist for future me.
-
-== Lazy mark scan
-
 Lazy mark scan is a lazy version of an algorithm called local mark scan.
 
-With local mark scan, every time an object's reference count is decremented, if its reference count does not hit 0, all of the objects reachable from that object are scanned recursively, and if it turns out that any of these objects were part of a cycle and are now no longer reachable, they will be freed @local_mark_scan.
+With local mark scan, every time an object's reference count is decremented, if its reference count does not hit 0, all of the objects reachable from that object are scanned recursively, and if it turns out that any of these objects were part of a cycle and are now no longer reachable, they will be freed @local_mark_scan. This technique is referred to as trial deletion, because you basically pretend those objects were deleted, then see if they still would've had references coming in from outside. Note: I'm not sure whether trial deletion always means that you're doing local mark scan at the lowest level of your algorithm, or if there are other completely different algorithms out there that fall under the term trial deletion.
 
-Since this process is expensive, lazy mark scan merely adds each object to a list of *potential cyclic roots* (PCRs). Every once in a while, this list of PCRs is traversed and mark scan is performed on all of these PCRs at once. Note that each PCR is not simply scanned individually, in sequence, because this would essentially be the same as local mark scan. Rather, each phase of the mark scan algorithm is sequentially performed on all PCRs before moving on to the next phase.
+Since this process is expensive, lazy mark scan merely adds each object to a list of *potential cyclic roots* (*PCRs*). Every once in a while, this list of PCRs is traversed and mark scan is performed on all of these PCRs at once. Note that each PCR is not simply scanned individually, in sequence, because this would essentially be the same as local mark scan. Rather, each phase of the mark scan algorithm is sequentially performed on all PCRs before moving on to the next phase.
 
-This still requires scanning a bunch of objects. There are many things you can do to improve reference counting performance significantly, and I ran into a bunch of such articles. However, I only found a couple that make optimizations based on compile-time information. This is possibly because TODO
+= Prior work
+
+However, lazy mark scan still requires scanning a bunch of objects. In a strongly-typed language, some guarantees can often be made about whether or not objects of one type can ever form cycles with objects of another type, and this can let us do less scanning.
+
+For example, @java_without_coffee_breaks takes advantage of type information available at runtime on the JVM. It doesn't add objects to the list of PCRs if their type makes it impossible for them to ever be part of cycles. @compiler_optimizations_joisha does the same, but as a compiler optimization.
+
+@morris_chang_cyclic_2012 tries to take this a step further. During the mark scan process, they considered not scanning objects known to be acyclic based on their type. However, they note that this cannot be done naively, as I will discuss in @quadratic_scanning_problem. Instead, they restrict themselves to not scanning known acyclic objects only if such objects do not have any references to cycles. This project is focused on removing this restriction.
 
 = Algorithm
 
 == Avoiding scanning children based on type
 
-In a statically typed language, some guarantees can be made about whether or not objects of one type can ever form cycles with objects of another type. At runtime, this lets us reduce the scanning we do.
+As mentioned before, we can look at the types of objects to determine whether they will ever form cycles with other objects. Fewer guarantees can be made if the type system in question includes subtyping or something, but this project only looks at a very simple language, with no subtyping, polymorphism, dependent types, closures, or other bells and whistles.
 
-Fewer guarantees can be made if the type system in question includes subtyping or something, but this project only looks at a very simple language, with no subtyping, polymorphism, dependent types, closures, or other bells and whistles.
-
-#smallcaps[Fred]'s user-defined types are only algebraic data types, I think they're called? They're tagged unions of product types. And rather than assume every field is mutable, fields need to be marked mutable explicitly. Immutability isn't central to my project, but it does give us some extra knowledge to avoid more scanning.
+#smallcaps[Fred]'s user-defined types are only tagged unions of product types. And rather than assume every field is mutable, fields need to be marked mutable explicitly. Immutability isn't central to my project, but it does give us some extra knowledge to avoid more scanning.
 
 This makes it easy to represent all the types in a program as a directed graph where the nodes are types. The fields inside every type can be represented as edges going from that type to the type of the field.
 
@@ -53,11 +53,11 @@ Although I may be lazy, #smallcaps[Fred] is not, and so there is currently no wa
 
 Now that we know that certain objects cannot form cycles with certain other objects, we can apply this knowledge at runtime. When recursively scanning the objects reachable from a PCR, every time we come across some object, we can avoid scanning those of its children that can never form a cycle with that object (based on their types). We will also only add an object to the list of PCRs in the first place if it's possible for that object to be part of a cycle (note the two rules above).
 
-== Quadratic scanning problem
+== Quadratic scanning problem <quadratic_scanning_problem>
 
 However, if done naively, this can result in not all garbage being collected in a single sweep of the list of PCRs @morris_chang_cyclic_2012. A quick fix for this would be to go over the list of PCRs multiple times until all garbage is gone, but this makes cycle collection quadratic in the number of objects.
 
-Below, I will give some example code that triggers this problem. Suppose you are creating a compiler and you have the following types. You can have `Context -> FileList -> Context` cycles, as well as `File -> ExprList -> Expr -> File` cycles.
+In this subsection, I will demonstrate this problem with an example. Suppose you are creating a compiler and you have the following types. You can have `Context -> FileList -> Context` cycles, as well as `File -> ExprList -> Expr -> File` cycles.
 
 ```haskell
 data Context = Context {
@@ -103,15 +103,23 @@ After running that code, this is what the graph of objects looks like:
 
 The green edges in the diagram above are references that are known not to introduce any cycles. Therefore, when doing mark-scan, we will not follow them (this is our modification from the previous section, not part of lazy mark scan). There are other references that don’t cause cycles in there, but we can't know this at compile-time. I'm going to call these green edges "innocent", because I don't know what sort of terms are actually used for them by real researchers.
 
-At some point, the variables `ctx`, `file`, and `expr` will go out of scope, so the `Context`, `File`, and `Expr` objects will all have their refcounts decremented before being added to the list of PCRs. All the objects in the diagram above have become garbage and are eagerly waiting to be freed, not knowing that rather than nirvana, all they will get is an endless cycle of rebirth and deallocation, until your laptop finally stops working and you have to throw it away. Thankfully, planned obsolescence will eventually bring nirvana to these objects in a matter of years.
+At some point, the variables `ctx`, `file`, and `expr` will go out of scope, so the `Context`, `File`, and `Expr` objects will all have their refcounts decremented before being added to the list of PCRs. All the objects in the diagram above have become garbage and are eagerly waiting to be freed.
 
 Let's trace what our naively modified lazy mark scan algorithm would do here:
+- All objects start out colored black.
 - First, we go to every object reachable from the `Context`, `File`, and `Expr` objects (without traversing green edges) and mark it gray.
   - The reference count of every object reachable from these gray objects is decremented, as if the gray objects have been deleted.
   - After doing this, the `Context` and `FileList` objects have a refcount of 0. `File` has a refcount of 1, while the `Expr` and `ExprList` objects have a refcount of 0.
-- TODO finish this
+- Now we run the Scan operation on those same objects.
+  - The `Context` and `FileList` will have refcounts of 0, so they'll be colored white.
+  - The `File` has refcount 1, so the ScanBlack operation will be run on it.
+    - At the end of this, `File` and everything it points to (the bottom cycle) will be colored black.
+    - The `File` object will have refcount 2, while the `Expr` and `ExprList` objects will have refcount 1.
+- Now we collect white objects.
+  - The `Context` and `FileList` will be collected, since they're white.
+  - But the `File`, `Expr`, and `ExprList` objects won't be collected, since they're black!
 
-Now the stuff in the top cycle has been correctly marked as garbage, but not the stuff in the bottom cycle. `File` lives because it has a reference from the `FileCons` object, and it keeps the rest of the bottom cycle alive. All the scanning we did on the bottom cycle was in vain, because we'll have to go back and repeat it now.
+`File` lives because it has a reference from the `FileCons` object, and it keeps the rest of the bottom cycle alive. Thus, all the scanning we did on the bottom cycle was in vain. We'll have to go back and re-scan the `File` object.
 
 Therefore, it is not enough to simply not traverse innocent edges. Fortunately, the solution to this is pretty simple.
 
@@ -193,11 +201,11 @@ I'd go into how my algorithm is orders of magnitude faster than base lazy mark s
 
 == `stupid.fred`
 
-If the previous benchmark wasn't artificial enough for you, this one definitely will be. I wanted to come up with something where my algorithm would perform worse than base lazy mark scan. This can happen if the overhead from inserting PCRs into the right bucket (sorted) is too high. You need to have a bunch of SCCs, and you need to often have objects from higher SCCs being added to the list of PCRs after objects from lower SCCs.
+If the previous benchmark wasn't artificial enough for you, this one definitely will be. I wanted to come up with something where my algorithm would perform worse than base lazy mark scan. This can happen if the overhead from inserting PCRs into the right bucket (sorted) is too high. You need to have a bunch of SCCs, and you need to often have objects from higher SCCs being added to the list of PCRs after objects from lower SCCs. This is a situation that probably isn't uncommon in real codebases.
 
-This is actually a situation that probably isn't uncommon in real codebases. If you have some long-lived object that's passed around everywhere, you probably have references to it being created all the time. I do believe escape analysis would help with/fix many, if not most of those cases, though. Removing a PCR every time its refcount is incremented could also help here, although that has tradeoffs.
+But I realized when writing this report that this isn't an actual problem. It just happens with my specific implementation. The number of SCCs will always be low, so the runtime can simply allocate an array holding all the PCR buckets at the very beginning of the program. When adding a new PCR, we can index into this array using the PCR's SCC. Adding PCRs now becomes a constant-time operation.
 
-I, unfortunately, couldn't come up with a decent example, so I wrote a script to do it for me. The script first generates 200 types. Each type $T_(i+1)$ has a field of type $T_i$. The script then generates an object of type $T_199$. Then it goes from $T_199$ down to $T_0$, adding objects to the list of PCRs. With base lazy mark scan, adding PCRs is a constant time operation, but with my algorithm, it's linear time, since an object of type $T_i$ here would have to go through $199 - i$ objects first.
+Nevertheless, I went to the effort of making this benchmark, so I'll leave this bit in. I couldn't actually come up with a decent example, so I wrote a script to do it for me. The script first generates 200 types. Each type $T_(i+1)$ has a field of type $T_i$. The script then generates an object of type $T_199$. Then it goes from $T_199$ down to $T_0$, adding objects to the list of PCRs. With base lazy mark scan, adding PCRs is a constant time operation, but with my algorithm, it's linear time, since an object of type $T_i$ here would have to go through $199 - i$ objects first.
 
 All of the stuff described above is then run 50,000 times. Here are the results:
 #table(
@@ -211,16 +219,15 @@ Again, all this tells you is that there are some cases where my algorithm can do
 
 = Conclusion
 
-= Future work
+= Future work <future_work>
 
-#bibliography("writeup-bib.bib")
-
-#heading(numbering: none)[
-  Why name it #smallcaps[Fred]?
-]
+= Why name it #smallcaps[Fred]?
 
 I was going to name it Foo, but there's already an esolang by that name that's fairly well-known (by esolang standards). So I went to the Wikipedia page on metasyntactic variables and picked "fred." I figured that if I needed to, I could pretend that it was something meaningful, like maybe an acronym or the name of a beloved childhood pet.
 
-For example, I could say that when I was young, I had a cute little hamster called Freddie Krueger, so named because of the striped red sweater my grandmother had knitted for him, as well as his proclivity for murdering small children. In his spare time, Fred would exercise on his hamster wheel, or as he liked to call it, his Hamster Cycle.
+For example, I could say that when I was young, I had a cute little hamster called Freddie Krueger, so named because of the hamster-sized striped red sweater my grandmother had knitted for him, as well as his proclivity for murdering small children. In his spare time, Fred would exercise on his hamster wheel, or as he liked to call it, his Hamster Cycle.
 
 But one day, I came home to find Fred lying on the hamster cycle, unresponsive. The vet said that he'd done too much running and had had a heart attack. I was devastated. It was then that I decided that, to exact my revenge on the cycle that killed Fred, I would kill all cycles.
+
+
+#bibliography("writeup-bib.bib")

@@ -54,3 +54,24 @@ Publisher: Elsevier Science Bv, Po Box 211, 1000 Ae Amsterdam, Netherlands},
 	pages = {98--107},
 	file = {PDF:C\:\\Users\\yasht\\Zotero\\storage\\IFPWL334\\Morris Chang et al. - 2012 - Cyclic reference counting by typed reference fields.pdf:application/pdf;ScienceDirect Snapshot:C\:\\Users\\yasht\\Zotero\\storage\\FHPHZGUW\\S1477842411000285.html:text/html},
 }
+
+@inproceedings{compiler_optimizations_joisha,
+	address={New York, NY, USA},
+	series={ISMM ’06},
+	title={Compiler optimizations for nondeferred reference: counting garbage collection},
+	ISBN={978-1-59593-221-1},
+	url={https://dl.acm.org/doi/10.1145/1133956.1133976},
+	DOI={10.1145/1133956.1133976},
+	abstractNote={Reference counting is a well-known technique for automatic memory management, offering unique advantages over other forms of garbage collection. However, on account of the high costs associated with the maintenance of up-to-date tallies of references from the stack, deferred variants are typically used in modern implementations. This partially sacrifices some of the benefits of non-deferred reference-counting (RC) garbage collection, like the immediate reclamation of garbage and short collector pause times.This paper presents a series of optimizations that target the stack and substantially enhance the throughput of nondeferred RC collection. A key enabler is a new static analysis and optimization called RC subsumption that significantly reduces the overhead of maintaining the stack contribution to reference counts. We report execution time improvements on a benchmark suite of ten C# programs, and show how RC subsumption, aided with other optimizations, improves the performance of nondeferred RC collection by as much as a factor of 10, making possible running times that are within 32% of that with an advanced traversal-based collector on seven programs, and 19% of that with a deferred RC collector on eight programs. This is in the context of a baseline RC implementation that is typically at least a factor of 6 slower than the tracing collector and a factor of 5 slower than the deferred RC collector.},
+	booktitle={Proceedings of the 5th international symposium on Memory management},
+	publisher={Association for Computing Machinery},
+	author={Joisha, Pramod G.},
+	year={2006},
+	month=jun,
+	pages={150–161},
+	collection={ISMM ’06}
+}
+
+ @inproceedings{java_without_coffee_breaks, address={New York, NY, USA}, series={PLDI ’01}, title={Java without the coffee breaks: a nonintrusive multiprocessor garbage collector}, ISBN={978-1-58113-414-8}, url={https://dl.acm.org/doi/10.1145/378795.378819}, DOI={10.1145/378795.378819}, abstractNote={The deployment of Java as a concurrent programming language has created a critical need for high-performance, concurrent, and incremental multiprocessor garbage collection. We present the Recycler, a fully concurrent pure reference counting garbage collector that we have implemented in the Jalapeño Java virtual machine running on shared memory multiprocessors.While a variety of multiprocessor collectors have been proposed and some have been implemented, experimental data is limited and there is little quantitative basis for comparison between different algorithms. We present measurements of the Recycler and compare it against a non-concurrent but parallel load-balancing mark-and-sweep collector (that we also implemented in Jalapeño), and evaluate the classical tradeoff between response time and throughput.When processor or memory resources are limited, the Recycler runs at about 90% of the speed of the mark-and-sweep collector. However, with an extra processor to run collection and with a moderate amount of memory headroom, the Recycler is able to operate without ever blocking the mutators and achieves a maximum measured mutator delay of only 2.6 milliseconds for our benchmarks. End-to-end execution time is usually within 5%.}, booktitle={Proceedings of the ACM SIGPLAN 2001 conference on Programming language design and implementation}, publisher={Association for Computing Machinery}, author={Bacon, David F. and Attanasio, Clement R. and Lee, Han B. and Rajan, V. T. and Smith, Stephen}, year={2001}, month=may, pages={92–103}, collection={PLDI ’01} }
+ @inproceedings{Bacon_Rajan_concurrent_collection, address={Berlin, Heidelberg}, title={Concurrent Cycle Collection in Reference Counted Systems}, ISBN={978-3-540-45337-6}, DOI={10.1007/3-540-45337-7_12}, abstractNote={Automatic storage reclamation via reference counting has important advantages, but has always suffered from a major weakness due to its inability to reclaim cyclic data structures.}, booktitle={ECOOP 2001 — Object-Oriented Programming}, publisher={Springer}, author={Bacon, David F. and Rajan, V. T.}, editor={Knudsen, Jørgen Lindskov}, year={2001}, pages={207–235}, language={en} }
+
