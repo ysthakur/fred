@@ -378,6 +378,8 @@ struct Bar* new$Bar() {
   return $res;
 }
 int main() {
+  pcrBuckets = calloc(sizeof(void *), 1);
+  numSccs = 1;
   struct Bar* bar = new$Bar();
   bar->rc ++;
   struct Foo* foo = new$Foo(bar);
@@ -389,5 +391,6 @@ int main() {
   $decr_Foo(foo);
   $decr_Bar(bar);
   processAllPCRs();
+  free(pcrBuckets);
   return ret$0;
 }

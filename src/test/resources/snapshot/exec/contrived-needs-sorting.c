@@ -782,6 +782,8 @@ struct Expr* new$Expr(struct File* file) {
   return $res;
 }
 int main() {
+  pcrBuckets = calloc(sizeof(void *), 3);
+  numSccs = 3;
   struct CtxRef* ctx = new$CtxRef(new$Context(new$FileNil(), "foo"));
   ctx->rc ++;
   struct File* file = new$File(new$ExprNil());
@@ -810,5 +812,6 @@ int main() {
   $decr_File(file);
   $decr_CtxRef(ctx);
   processAllPCRs();
+  free(pcrBuckets);
   return ret$3;
 }

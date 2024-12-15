@@ -163,10 +163,13 @@ int fn$foo(struct Foo* foo) {
   return ret$2;
 }
 int main() {
+  pcrBuckets = calloc(sizeof(void *), 1);
+  numSccs = 1;
   struct Foo* foo = new$Bar(1, 2);
   foo->rc ++;
   int ret$3 = fn$foo(foo);
   $decr_Foo(foo);
   processAllPCRs();
+  free(pcrBuckets);
   return ret$3;
 }

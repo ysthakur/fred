@@ -31,7 +31,7 @@ object Translator {
         )
       case RcAlgo.Mine => Cycles.fromFile(file)
     }
-    val helper = Helper(typer)
+    val helper = Helper(typer, cycles)
     val (genDecls, genImpls) =
       List(Freer, Decrementer, MarkGray, Scan, ScanBlack, CollectWhite, Printer)
         .flatMap(gen => file.typeDefs.map(td => (gen.decl(td), gen.impl(td))))
@@ -378,7 +378,7 @@ object Translator {
     */
   private def tagName(ctorName: String): String = s"${ctorName}_tag"
 
-  private class Helper(typer: Typer) {
+  private class Helper(typer: Typer, cycles: Cycles) {
 
     /** Contains a mapping of mangled field names for every type */
     val mangledFieldsFor = mutable.Map.empty[TypeDef, Map[String, String]]
@@ -454,11 +454,22 @@ object Translator {
 
       val signature = s"$typeToC ${mangleFnName(fn.name.value)}($params)"
 
+      val numSccs = cycles.sccs.size
+      val allocPcrBuckets =
+        if (fn.name.value == "main")
+          indent(1)(s"""|pcrBuckets = calloc(sizeof(void *), $numSccs);
+                        |numSccs = $numSccs;""".stripMargin)
+        else ""
+
       val triggerGC =
-        if (fn.name.value == "main") indent(1)("processAllPCRs();") else ""
+        if (fn.name.value == "main")
+          indent(1)("""|processAllPCRs();
+                       |free(pcrBuckets);""".stripMargin)
+        else ""
 
       val decl = s"$signature;"
       val impl = s"""|$signature {
+                     |$allocPcrBuckets
                      |${indent(1)(paramsSetup)}
                      |${indent(1)(bodySetup)}
                      |  $typeToC $resVar = $body;

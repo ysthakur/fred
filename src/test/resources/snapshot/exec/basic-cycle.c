@@ -267,6 +267,8 @@ struct List* new$List(struct Option* next, int value) {
   return $res;
 }
 int main() {
+  pcrBuckets = calloc(sizeof(void *), 1);
+  numSccs = 1;
   struct List* a = new$List(new$None(), 1);
   a->rc ++;
   struct List* b = new$List(new$Some(a), 2);
@@ -280,5 +282,6 @@ int main() {
   $decr_List(b);
   $decr_List(a);
   processAllPCRs();
+  free(pcrBuckets);
   return ret$1;
 }

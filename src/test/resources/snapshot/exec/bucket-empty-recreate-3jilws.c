@@ -262,6 +262,8 @@ struct OptFoo* new$NoneFoo() {
   return $res;
 }
 int main() {
+  pcrBuckets = calloc(sizeof(void *), 1);
+  numSccs = 1;
   struct Foo* v0 = new$Foo(new$NoneFoo());
   v0->rc ++;
   struct Foo* v1 = new$Foo(new$NoneFoo());
@@ -286,5 +288,6 @@ int main() {
   $decr_Foo(v1);
   $decr_Foo(v0);
   processAllPCRs();
+  free(pcrBuckets);
   return ret$3;
 }

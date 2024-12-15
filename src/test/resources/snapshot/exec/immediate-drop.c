@@ -99,8 +99,11 @@ struct Foo* new$Foo() {
   return $res;
 }
 int main() {
+  pcrBuckets = calloc(sizeof(void *), 1);
+  numSccs = 1;
   drop((void *) new$Foo(), (void *) $decr_Foo);
   int ret$0 = 0;
   processAllPCRs();
+  free(pcrBuckets);
   return ret$0;
 }

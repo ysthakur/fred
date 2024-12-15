@@ -215,11 +215,25 @@ All of the stuff described above is then run 50,000 times. Here are the results:
   [Yes], [11054113602], [4.233204]
 )
 
-Again, all this tells you is that there are some cases where my algorithm can do worse than lazy mark scan.
+After using an array like I mentioned above, I ran the stupid benchmark again. Now, both algorithms have about the same performance!
+#table(
+  columns: (auto, auto, auto),
+  table.header([Lazy mark scan only?], [Timestamp counter], [Clock (s)]),
+  [No], [8890733476], [3.404776],
+  [Yes], [10184751983], [3.900381]
+)
 
 = Conclusion
 
 = Future work <future_work>
+
+== Formal verification
+
+I worry that this algorithm isn't actually sound. It would be nice to prove using Coq or something that, if you group and sort PCRs according to the SCC of their type and process each group separately in order, you'll still collect all cycles.
+
+== Applying this to newer algorithms
+
+The papers I was working off are pretty old. I'd like
 
 = Why name it #smallcaps[Fred]?
 

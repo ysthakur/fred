@@ -163,11 +163,14 @@ int fn$sum(struct List* list) {
   return ret$2;
 }
 int main() {
+  pcrBuckets = calloc(sizeof(void *), 1);
+  numSccs = 1;
   struct List* list = new$Cons(new$Cons(new$Cons(new$Nil(), 4), 2), 1);
   list->rc ++;
   printf("%d\n", fn$sum(list));
   int ret$3 = 0;
   $decr_List(list);
   processAllPCRs();
+  free(pcrBuckets);
   return ret$3;
 }

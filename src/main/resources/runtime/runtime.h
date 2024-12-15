@@ -22,13 +22,6 @@ struct PCR
   struct PCR *next;
 };
 
-struct PCRBucket
-{
-  int scc;
-  struct PCR *pcrs;
-  struct PCRBucket *next;
-};
-
 // Common object header
 typedef struct
 {
@@ -45,7 +38,8 @@ struct FreeCell
   void (*free)(void *);
 };
 
-struct PCRBucket *pcrBuckets = NULL;
+struct PCR **pcrBuckets = NULL;
+int numSccs = 0;
 struct FreeCell *freeList = NULL;
 
 /** For dropping objects that never get assigned anywhere */
@@ -65,12 +59,6 @@ void addPCR(
     return;
   obj->addedPCR = 1;
 
-  struct PCRBucket **prev = &pcrBuckets;
-  while (*prev != NULL && (*prev)->scc < scc)
-  {
-    prev = &(*prev)->next;
-  }
-
   struct PCR *pcr = malloc(sizeof(struct PCR));
   pcr->obj = obj;
   pcr->markGray = markGray;
@@ -78,19 +66,8 @@ void addPCR(
   pcr->collectWhite = collectWhite;
   pcr->next = NULL;
 
-  if (*prev == NULL || scc < (*prev)->scc)
-  {
-    struct PCRBucket *newBucket = malloc(sizeof(struct PCRBucket));
-    newBucket->scc = scc;
-    newBucket->pcrs = pcr;
-    newBucket->next = *prev;
-    *prev = newBucket;
-  }
-  else
-  {
-    pcr->next = (*prev)->pcrs;
-    (*prev)->pcrs = pcr;
-  }
+  pcr->next = pcrBuckets[scc];
+  pcrBuckets[scc] = pcr;
 }
 
 void removePCR(Common *obj, int scc)
@@ -99,26 +76,13 @@ void removePCR(Common *obj, int scc)
     return;
   obj->addedPCR = 0;
 
-  struct PCRBucket **prevBucket = &pcrBuckets;
-  struct PCRBucket *bucket = pcrBuckets;
-  while (bucket->scc != scc)
-  {
-    prevBucket = &bucket->next;
-    bucket = bucket->next;
-  }
-
-  struct PCR **prev = &bucket->pcrs;
-  struct PCR *head = bucket->pcrs;
+  struct PCR **prev = &pcrBuckets[scc];
+  struct PCR *head = pcrBuckets[scc];
   while (head != NULL)
   {
     if (head->obj == obj)
     {
       *prev = head->next;
-      if (bucket->pcrs == NULL) {
-        // This was the only PCR in the bucket, so remove the bucket too
-        *prevBucket = bucket->next;
-        free(bucket);
-      }
       free(head);
       return;
     }
@@ -171,20 +135,18 @@ void collectFreeList()
 
 void processAllPCRs()
 {
-  while (pcrBuckets != NULL)
+  for (int scc = 0; scc < numSccs; scc ++)
   {
-    markGrayAllPCRs(pcrBuckets->pcrs);
-    scanAllPCRs(pcrBuckets->pcrs);
+    markGrayAllPCRs(pcrBuckets[scc]);
+    scanAllPCRs(pcrBuckets[scc]);
     if (freeList != NULL)
     {
       fprintf(stderr, "Free list should be null\n");
       exit(1);
     }
-    collectWhiteAllPCRs(pcrBuckets->pcrs);
+    collectWhiteAllPCRs(pcrBuckets[scc]);
+    pcrBuckets[scc] = NULL;
     collectFreeList();
-    struct PCRBucket *next = pcrBuckets->next;
-    free(pcrBuckets);
-    pcrBuckets = next;
   }
 }
 
