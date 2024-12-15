@@ -31,7 +31,7 @@ Since this process is expensive, lazy mark scan merely adds each object to a lis
 
 However, lazy mark scan still requires scanning a bunch of objects. In a strongly-typed language, some guarantees can often be made about whether or not objects of one type can ever form cycles with objects of another type, and this can let us do less scanning.
 
-For example, @java_without_coffee_breaks takes advantage of type information available at runtime on the JVM. It doesn't add objects to the list of PCRs if their type makes it impossible for them to ever be part of cycles. @compiler_optimizations_joisha does the same, but as a compiler optimization.
+For example, @Bacon_Rajan_concurrent_collection takes advantage of type information available at runtime on the JVM. It doesn't add objects to the list of PCRs if their type makes it impossible for them to ever be part of cycles. @compiler_optimizations_joisha does the same, but as a compiler optimization.
 
 @morris_chang_cyclic_2012 tries to take this a step further. During the mark scan process, they considered not scanning objects known to be acyclic based on their type. However, they note that this cannot be done naively, as I will discuss in @quadratic_scanning_problem. Instead, they restrict themselves to not scanning known acyclic objects only if such objects do not have any references to cycles. This project is focused on removing this restriction.
 
@@ -148,15 +148,25 @@ As a bonus, grouping objects by SCC and processing them separately also lets us 
 
 #smallcaps[Fred] was created to try out this algorithm. The implementation can be found at https://github.com/ysthakur/fred. The language uses automatic reference counting and is compiled to C. Partly because it is compiled to C and partly because I made it, it involves copious amounts of jank. When I have time, I will try to get rid of some of this awfulness, as well as document my code better, but in the meantime, #smallcaps[Fred] is mostly functional (not functional like Haskell, functional like an alcoholic).
 
-PCRs are stored in buckets. Each bucket stores PCRs from only one SCC. These buckets are stored in a linked list, and they are kept in sorted order according to their SCC. Note: while writing this report, I switched to using an array for performance reasons (discussed in @stupid_benchmark).
+PCRs are stored in buckets, which are linked lists. Each bucket stores PCRs from only one SCC. These buckets are themselves stored in a linked list, and they are kept in sorted order according to their SCC. Note: while writing this report, I switched to using an array for performance reasons (discussed in @stupid_benchmark).
 
 There's a `runtime.h` header file that does all the PCR stuff. It contains `addPCR`, `removePCR`, and `processAllPCRs` functions.
 
 When an object's refcount is decremented and it doesn't hit 0, it's added to the list of PCRs using `addPCR` and its `addedPCR` is set to true. The next time the object's refcount is decremented, if `addedPCR` is true, there won't be any need to call `addPCR`.
 
+`removePCR` is called whenever an object's refcount is decremented and hits 0, since it will be freed. I could also have chosen to call `removePCR` on an object every time its refcount was incremented (since that means it's cyclic garbage). However, this could have resulted in `addPCR` and `removePCR` repeatedly being called over and over on the same object as it was passed around to various places.
+
+That said, I saw when writing this report that @Bacon_Rajan_concurrent_collection colors objects black whenever their refcounts are incremented (without removing from the list of PCRs). This seems like a reasonable optimization, and I could implement it.
+
 `processAllPCRs` iterates over all the PCR buckets and runs lazy mark scan on each bucket individually. When it's done, all PCRs and all PCR buckets are freed.
 
 `processAllPCRs` buckets is only called at the end of the `main` function. In real life, you'd want to throw in a check every time you allocate a new object or something that determines whether or not to collect cycles, but calling `processAllPCRs` only at the end of the program was good enough for the short programs I was testing. The user can still insert calls to `processAllPCRs` wherever they want.
+
+One minor advantage of putting everything into a bucket is that `removePCR` is faster. You don't need to search through a single flat list of all PCRs. Once you find the right bucket for that PCR's SCC (which is linear in the number of SCCs), you only need to search within that bucket.
+
+== Disabling the optimization
+
+For benchmarking, I needed to be able to run code both with and without my optimization. So, I added a compiler flag `--lazy-mark-scan-only` to output code that uses base lazy mark scan rather than my algorithm. It doesn't actually use lazy mark scan, but it's close enough. The only change it makes is treat every type as if they're in the same SCC. This means that all objects are put into the same bucket and are scanned together, just as with lazy mark scan.
 
 = Benchmarks
 
@@ -225,7 +235,7 @@ All of the stuff described above is then run 50,000 times. Here are the results:
   [Yes], [11054113602], [4.233204]
 )
 
-But I realized when writing this report that this problem only happens with my specific implementation. The PCR buckets can be held in an array rather than a linked list. The number of SCCs is known statically and will always be low, so this is fine. When adding a new PCR, we can index into this array using the PCR's SCC. Adding PCRs now becomes a constant-time operation.
+But I realized when writing this report that this problem only happens with my specific implementation. The PCR buckets can be held in an array rather than a linked list. This is fine because the number of SCCs is known statically and will always be low. When adding a new PCR, we can index into this array using the PCR's SCC. Adding PCRs now becomes a constant-time operation.
 
 After making this modification, I ran the stupid benchmark again. Now, both algorithms have about the same performance!
 #table(
@@ -236,21 +246,35 @@ After making this modification, I ran the stupid benchmark again. Now, both algo
   [Yes], [10184751983], [3.900381]
 )
 
+Now that this change has been made, I can't think of any cases where my algorithm would perform noticeably worse than base lazy mark scan.
+
 = Conclusion
+
+I made a language that uses automatic reference counting and in it, I implemented a compiler optimization to make lazy mark scan avoid scanning certain objects based on type information. Whether this optimization would actually be better than base lazy mark scan on real code remains to be seen, but it should never perform significantly worse than base lazy mark scan.
+
+It should limit how much of the heap you scan, because when processing PCRs from one SCC, you only ever scan objects from that same SCC. This lets you avoid entire subgraphs, which could be useful if you have objects close to the GC roots constantly being deleted. I have no idea how often a situation like that would arise in real code, though.
+
+The work I've done here is more applicable to functional languages than languages like Java, where a lot of garbage collection research is focused. Java has subtyping, which makes it harder to tell which types can form cycles with which other types. Mutability is also a lot more common, partly because a lot of Java developers don't use `final` as much as they should, so from the compiler's perspective, it's harder to tell if cycles can happen. It's also just more common to have cycles [citation needed I guess but whatever].
 
 = Future work <future_work>
 
 == Formal verification
 
-I worry that this algorithm isn't actually sound. It would be nice to prove using Coq or something that, if you group and sort PCRs according to the SCC of their type and process each group separately in order, you'll still collect all cycles.
+I worry a little that this algorithm isn't actually sound. It would be nice to prove using Coq or something that, if you group and sort PCRs according to the SCC of their type and process each group separately in order, you'll still collect all cycles.
 
 == Applying this to newer algorithms
 
-The papers I was working off are pretty old. My implementation was built on top of the original lazy mark scan algorithm, even though cycle collection for reference counting has come a long way since. Even back in 2001, @java_without_coffee_breaks had a complicated concurrent cycle collector, and I have no idea if my stuff applies there. If newer algorithms can't be improved using the stuff I talked about here, then my project won't have been very useful.
+The papers I was working off are pretty old. My implementation was built on top of the original lazy mark scan algorithm, even though cycle collection for reference counting has come a long way since. Even back in 2001, @java_without_coffee_breaks/@Bacon_Rajan_concurrent_collection had a complicated concurrent cycle collector, and I have no idea if my stuff applies there. If newer algorithms can't be improved using the stuff I talked about here, then my project won't have been very useful.
+
+In addition to concurrency, collectors can also use tracing rather than trial deletion for finding cycles. The stuff I worked on here isn't immediately applicable outside of trial deletion, but it would be interesting to explore how information about types could make tracing more focused or something.
 
 == Adding this to existing languages
 
 There's nothing special about #smallcaps[Fred] as a language, and so the compiler optimizations and runtime worked on here can be applied to an existing compiled language. Such a language would have plenty of code available already, and this could be used for creating more meaningful benchmarks than the ones I made above.
+
+== Restrictions to help the compiler
+
+Aside from immutable fields, the compiler doesn't have much information to help it determine what can form cycles with what. It would be interesting to explore possible restrictions that programmers could put on function parameters or whatever in order to give the compiler more information and let it make more optimizations.
 
 = Why name it #smallcaps[Fred]?
 
