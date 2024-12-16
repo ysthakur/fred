@@ -76,9 +76,10 @@ object Compiler {
       .getResourceAsStream(RuntimeHeader)
     val io = ProcessIO(
       in => {
-        in.write(runtimeHeader.readAllBytes())
+        in.write(generated.getBytes())
+        // in.write(runtimeHeader.readAllBytes())
         // TODO removing #include runtime.h is a horrendous hack
-        in.write(generated.replaceAll("#include \"runtime.h\"", "").getBytes())
+        // in.write(generated.replaceAll("#include \"runtime.h\"", "").getBytes())
         in.close()
       },
       out => print(String(out.readAllBytes())),
@@ -88,9 +89,16 @@ object Compiler {
     val extraIncludes =
       if (settings.includeMemcheck) "-I /usr/include/valgrind" else ""
 
-    assert(s"gcc $extraIncludes -o $outExe -x c -".run(io).exitValue() == 0)
+    assert(s"gcc -g -I ${includesFolder()} $extraIncludes -o $outExe -x c -".run(io).exitValue() == 0)
     File(outExe).setExecutable(true)
 
     runtimeHeader.close()
+  }
+
+  /** Path to the folder with header files to include */
+  private def includesFolder(): String = {
+    val runtimeFile = this.getClass().getClassLoader()
+      .getResource(RuntimeHeader).toURI()
+    java.nio.file.Paths.get(runtimeFile).getParent().toString()
   }
 }

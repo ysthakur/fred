@@ -43,8 +43,9 @@ int numSccs = 0;
 struct FreeCell *freeList = NULL;
 
 /** For dropping objects that never get assigned anywhere */
-void drop(Common *obj, void (*decrRC)(void *)) {
-  obj->rc ++;
+void drop(Common *obj, void (*decrRC)(void *))
+{
+  obj->rc++;
   decrRC(obj);
 }
 
@@ -135,25 +136,39 @@ void collectFreeList()
 
 void processAllPCRs()
 {
-  for (int scc = 0; scc < numSccs; scc ++)
+  for (int scc = 0; scc < numSccs; scc++)
   {
-    markGrayAllPCRs(pcrBuckets[scc]);
-    scanAllPCRs(pcrBuckets[scc]);
+    for (struct PCR *curr = pcrBuckets[scc]; curr != NULL; curr = curr->next)
+    {
+      curr->markGray(curr->obj);
+    }
+    for (struct PCR *curr = pcrBuckets[scc]; curr != NULL; curr = curr->next)
+    {
+      curr->scan(curr->obj);
+    }
     if (freeList != NULL)
     {
       fprintf(stderr, "Free list should be null\n");
       exit(1);
     }
-    collectWhiteAllPCRs(pcrBuckets[scc]);
+    struct PCR *curr = pcrBuckets[scc];
+    while (curr != NULL)
+    {
+      curr->collectWhite(curr->obj);
+      struct PCR *next = curr->next;
+      free(curr);
+      curr = next;
+    }
     pcrBuckets[scc] = NULL;
     collectFreeList();
   }
 }
 
 // From https://stackoverflow.com/a/14783909/11882002
-static inline u_int64_t rdtscp() {
-  u_int64_t rax,rdx;
+static inline u_int64_t rdtscp()
+{
+  u_int64_t rax, rdx;
   u_int32_t aux;
-  asm volatile ( "rdtscp\n" : "=a" (rax), "=d" (rdx), "=c" (aux) : : );
+  asm volatile("rdtscp\n" : "=a"(rax), "=d"(rdx), "=c"(aux) : :);
   return (rdx << 32) + rax;
 }

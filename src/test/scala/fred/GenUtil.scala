@@ -78,7 +78,7 @@ object GenUtil {
   }
 
   given shrinkGenerated: Shrink[GeneratedProgram] = Shrink { prog =>
-    if (prog.stmts.isEmpty) Stream.empty
+    if (prog.stmts.isEmpty || true) Stream.empty
     else {
       Shrink.shrink(prog.stmts)(Shrink.shrinkContainer)
         .map(stmts => prog.copy(stmts = stmts))
@@ -116,7 +116,7 @@ object GenUtil {
           val decrLhs =
             if (remVars.contains(lhs)) List(decrRc(lhs, varTypes(lhs))) else Nil
           val decrRhs =
-            if (remVars.contains(rhs)) List(decrRc(rhs, varTypes(rhs))) else Nil
+            if (lhs != rhs && remVars.contains(rhs)) List(decrRc(rhs, varTypes(rhs))) else Nil
           (stmt.asAst :: decrLhs ::: decrRhs ::: next, remVars - lhs - rhs)
         case stmt :: rest =>
           val (next, remVars) = rec(rest)

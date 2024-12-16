@@ -1,9 +1,6 @@
 package fred
 
-case class Span(start: Int, end: Int) {
-  override def toString =
-    if (start == -1 && end == -1) "(:)" else s"($start:$end)"
-}
+case class Span(start: Int, end: Int)
 
 object Span {
 
@@ -11,9 +8,7 @@ object Span {
   def synth = Span(-1, -1)
 }
 
-case class Spanned[T](value: T, span: Span) {
-  override def toString: String = value.toString
-}
+case class Spanned[T](value: T, span: Span)
 
 case class ParsedFile(typeDefs: List[TypeDef], fns: List[FnDef])
 
