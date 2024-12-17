@@ -276,6 +276,8 @@ There's nothing special about #smallcaps[Fred] as a language, and so the compile
 
 Aside from immutable fields, the compiler doesn't have much information to help it determine what can form cycles with what. It would be interesting to explore possible restrictions that programmers could put on function parameters or whatever in order to give the compiler more information and let it make more optimizations.
 
+For example, if you have a `ClosureWrapper` type that holds a closure, you don't want cycles between the closure and `ClosureWrapper`. So you can say that `ClosureWrapper`'s closure-holding field will only accept closures that don't have references to any `ClosureWrapper` objects.
+
 = Why name it #smallcaps[Fred]?
 
 I was going to name it Foo, but there's already an esolang by that name that's fairly well-known (by esolang standards). So I went to the Wikipedia page on metasyntactic variables and picked "fred." I figured that if I needed to, I could pretend that it was something meaningful, like maybe an acronym or the name of a beloved childhood pet.
