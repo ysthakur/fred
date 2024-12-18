@@ -272,11 +272,19 @@ In addition to concurrency, collectors can also use tracing rather than trial de
 
 There's nothing special about #smallcaps[Fred] as a language, and so the compiler optimizations and runtime worked on here can be applied to an existing compiled language. Such a language would have plenty of code available already, and this could be used for creating more meaningful benchmarks than the ones I made above.
 
+== Double reference counts
+
+In @morris_chang_cyclic_2012, Chang et al. propose using two reference counts. Similarly to that, we can use two reference counts: an acyclic refcount for known acyclic references from other SCCs, and a cyclic refcount for possibly cyclic references from the same SCC. As long as an object's acyclic refcount is positive, it must be alive, so it doesn't need to be treated as a PCR.
+
 == Restrictions to help the compiler
 
 Aside from immutable fields, the compiler doesn't have much information to help it determine what can form cycles with what. It would be interesting to explore possible restrictions that programmers could put on function parameters or whatever in order to give the compiler more information and let it make more optimizations.
 
 For example, if you have a `ClosureWrapper` type that holds a closure, you don't want cycles between the closure and `ClosureWrapper`. So you can say that `ClosureWrapper`'s closure-holding field will only accept closures that don't have references to any `ClosureWrapper` objects.
+
+== Big cycles
+
+The compiler optimizations here won't be very useful if nearly all of the objects are of types from the same SCC. If every object is in the same SCC, it's basically just doing base lazy mark scan. In all of the Java benchmarks tried by @morris_chang_cyclic_2012, most of the created objects are cyclic. Although I am mainly trying to improve things for functional languages, not Java, and the cyclic objects didn't necessarily all have types in the same SCC, this is a problem worth finding a solution to. I don't think there's a way to solve this problem entirely without the programmer helping the compiler out a bit.
 
 = Why name it #smallcaps[Fred]?
 
