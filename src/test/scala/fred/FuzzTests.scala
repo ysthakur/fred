@@ -8,8 +8,6 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import org.scalacheck.Gen
 import org.scalatest.tagobjects.Slow
 import org.scalacheck.Shrink
-import org.scalacheck.Gen.Parameters
-import org.scalacheck.rng.Seed
 
 import fred.Compiler.Settings
 import fred.GenUtil.{GenStmt, GeneratedProgram}
