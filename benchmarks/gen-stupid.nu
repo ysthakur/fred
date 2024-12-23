@@ -18,7 +18,7 @@ print (1..<$numTypes | reduce -f $v0 {|t, acc| $"T($t) { cyclic: NoneT($t) {}, f
 print $"fn triggerDecrs\(v: T($numTypes - 1)): int ="
 for nesting in 0..<$numTypes {
   let ref = 0..<$nesting | each { ".f" } | str join
-  print $"\(let temp($nesting) = v($ref) in 0);"
+  print $"let temp($nesting) = v($ref) in"
 }
 print "0"
 
