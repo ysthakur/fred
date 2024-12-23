@@ -29,7 +29,12 @@ object Translator {
           // whole program, make this an empty set in that case
           Set(0)
         )
-      case RcAlgo.Mine => Cycles.fromFile(file)
+      case RcAlgo.Mine => {
+        val cycles = Cycles.fromFile(file)
+        if (settings.allSccsBad) cycles
+          .copy(badSCCs = cycles.sccs.indices.toSet)
+        else cycles
+      }
     }
     val helper = Helper(typer, cycles)
     val (genDecls, genImpls) =

@@ -1,14 +1,14 @@
 const jar = "fred.jar"
 const outExe = "bench.bin"
 
-export def run [ file: string, lazyMarkScanOnly: bool ] {
+export def run [ file: string, lazyMarkScanOnly: bool, allSccsBad: bool ] {
   let benchName = $file | path basename
-  if $lazyMarkScanOnly {
-    java -jar $jar $file -o $outExe --lazy-mark-scan-only
-  } else {
-    java -jar $jar $file -o $outExe
-  }
-  print $"Compiled ($file) \(lazy-mark-scan-only: ($lazyMarkScanOnly))"
+  let opts = [
+    ...(if $lazyMarkScanOnly { [--lazy-mark-scan-only] } else { [] }),
+    ...(if $allSccsBad { [--all-sccs-bad] } else { [] })
+  ]
+  java -jar $jar $file -o $outExe ...$opts
+  print $"Compiled ($file) \(lazy-mark-scan-only: ($lazyMarkScanOnly), all-sccs-bad: ($allSccsBad))"
   let out = ^$"./($outExe)"
   print $out
   let res = (
@@ -20,12 +20,19 @@ export def run [ file: string, lazyMarkScanOnly: bool ] {
     Name: $benchName,
     "Timestamp counter": $res.tsc,
     Clock: $res.clock,
-    "Lazy mark scan only": $lazyMarkScanOnly
+    "Lazy mark scan only": $lazyMarkScanOnly,
+    "All SCCs bad": $allSccsBad,
   }
 }
 
-export def run-all [ ] {
-  let files = (ls benchmarks/*.fred).name
-  let results = $files | each { |file| [(run $file false), (run $file true)] }
+export def run-all [ files: glob = benchmarks/*.fred ] {
+  let results = glob $files | each { |file|
+      [
+        (run $file false false),
+        (run $file false true),
+        (run $file true false),
+        (run $file true true)
+      ]
+    }
   $results | flatten
 }

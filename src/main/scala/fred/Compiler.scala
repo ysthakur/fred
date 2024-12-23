@@ -2,16 +2,17 @@ package fred
 
 import scala.sys.process.*
 import java.io.File
-
-import scopt.OParser
 import java.nio.file.Files
 import java.nio.file.Path
+
+import scopt.OParser
 
 object Compiler {
   private val RuntimeHeader = "runtime/runtime.h"
 
   case class Settings(
       rcAlgo: RcAlgo = RcAlgo.Mine,
+      allSccsBad: Boolean = false,
       includeMemcheck: Boolean = false
   )
 
@@ -37,7 +38,12 @@ object Compiler {
           .text("Output executable (default: a.out)"),
         opt[Unit]("lazy-mark-scan-only").action((_, opts) =>
           opts.copy(settings = opts.settings.copy(rcAlgo = RcAlgo.LazyMarkScan))
-        ).text("Use base lazy mark scan algorithm instead of my cool one :(")
+        ).text("Use base lazy mark scan algorithm instead of my cool one :("),
+        opt[Unit]("all-sccs-bad").action((_, opts) =>
+          opts.copy(settings = opts.settings.copy(allSccsBad = true))
+        ).text(
+          "Consider all SCCs to be bad, i.e., act like all fields are mutable and that any type SCC can have cycles at runtime"
+        )
       )
     }
     OParser.parse(parser, args, Options()) match {

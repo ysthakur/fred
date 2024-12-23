@@ -2,7 +2,8 @@ data Player
   = Player { store: Store }
   // This exists only to make the compiler think that Player can be involved in cycles
   | PlayerCyclic {
-    mut player: Player
+    // With the --all-sccs-bad flag enabled, this would make the compiler think there could be a cycle
+    player: Player
   }
 
 // Represents some shared data that all Player objects have a reference to
@@ -11,8 +12,8 @@ data Store = Store { datums: Data }
 data Data
   = DataCons {
     value: int,
-    // This is mut only so the compiler thinks there can be a cycle at runtime
-    mut next: Data
+    // This would need to be mut for the compiler to think there could be a cycle at runtime
+    next: Data
   }
   | DataNil {}
 
