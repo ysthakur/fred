@@ -1,6 +1,7 @@
 package fred
 
 import scala.jdk.CollectionConverters.*
+import scala.util.Random
 
 import org.scalacheck.Gen
 import org.scalacheck.Shrink
@@ -18,17 +19,17 @@ object GenUtil {
     def asAst: Expr = {
       this match {
         case Assign(lhs, field, fieldType, rhs) => SetFieldExpr(
-            Spanned(lhs, Span.synth),
+            Spanned(lhs, randomSpan),
             Spanned(field, Span.synth),
             CtorCall(
               Spanned(s"Some$fieldType", Span.synth),
               List((
                 Spanned(GenUtil.SomeField, Span.synth),
-                VarRef(rhs, Span.synth)
+                VarRef(rhs, randomSpan)
               )),
               Span.synth
             ),
-            Span.synth
+            randomSpan
           )
         case ValgrindCheck => FnCall(
             Spanned("c", Span.synth),
@@ -56,7 +57,7 @@ object GenUtil {
   ) {
     def asAst: ParsedFile = {
       val finalRes = IntLiteral(0, Span.synth)
-      val exprs = GenUtil.insertDecrs(this.stmts, this.varTypes)
+      val exprs = this.stmts.map(_.asAst)
       val body = exprs.foldRight(finalRes: Expr)(
         BinExpr(_, Spanned(BinOp.Seq, Span.synth), _)
       )
@@ -78,54 +79,17 @@ object GenUtil {
   }
 
   given shrinkGenerated: Shrink[GeneratedProgram] = Shrink { prog =>
-    if (prog.stmts.isEmpty || true) Stream.empty
+    if (prog.stmts.isEmpty) Stream.empty
     else {
       Shrink.shrink(prog.stmts)(Shrink.shrinkContainer)
         .map(stmts => prog.copy(stmts = stmts))
     }
   }
 
-  /** Insert a call to decrement the reference count of every variable after its
-    * last usage. Also converts [[GenStmt]]s to [[Expr]]s
-    * @param varTypes
-    *   Map variable names to types
+  /** Use random spans rather than `Span.synth` to ensure that different Expr
+    * objects don't compare equal
     */
-  def insertDecrs(
-      stmts: List[GenStmt],
-      varTypes: Map[String, String]
-  ): List[Expr] = {
-    val allVars = varTypes.keySet
-
-    def decrRc(name: String, typ: String): Expr = FnCall(
-      Spanned("c", Span.synth),
-      List(
-        // Why the "; " at the start? So it's not matched by the regex that
-        // removes all the $decr_Type calls at the bottom of the main function
-        StringLiteral(s"; $$decr_$typ($name);", Span.synth)
-      ),
-      None,
-      None,
-      Span.synth
-    )
-
-    def rec(stmts: List[GenStmt]): (List[Expr], Set[String]) = {
-      stmts match {
-        case Nil => (Nil, allVars.toSet)
-        case (stmt @ GenStmt.Assign(lhs, field, fieldType, rhs)) :: rest =>
-          val (next, remVars) = rec(rest)
-          val decrLhs =
-            if (remVars.contains(lhs)) List(decrRc(lhs, varTypes(lhs))) else Nil
-          val decrRhs =
-            if (lhs != rhs && remVars.contains(rhs)) List(decrRc(rhs, varTypes(rhs))) else Nil
-          (stmt.asAst :: decrLhs ::: decrRhs ::: next, remVars - lhs - rhs)
-        case stmt :: rest =>
-          val (next, remVars) = rec(rest)
-          (stmt.asAst :: next, remVars)
-      }
-    }
-    val (res, remVars) = rec(stmts)
-    remVars.map(varName => decrRc(varName, varTypes(varName))).toList ::: res
-  }
+  def randomSpan: Span = Span(Random.nextInt(), Random.nextInt())
 
   def sequence[T](gens: Iterable[Gen[T]]): Gen[List[T]] = Gen
     .sequence[List[T], T](gens)
@@ -211,7 +175,7 @@ object GenUtil {
         GenUtil.sequence(typ.cases.head.fields.map { field =>
           prevTypes.get(field.typ.name) match {
             case Some(vars) => Gen.oneOf(vars.keySet)
-                .map(field.name -> VarRef(_, Span.synth))
+                .map(field.name -> VarRef(_, randomSpan))
             case None => Gen.const(
                 field.name -> CtorCall(
                   Spanned(

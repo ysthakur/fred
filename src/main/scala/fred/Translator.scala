@@ -455,10 +455,6 @@ object Translator {
         s"Function: ${fn.name.value}, unused vars: $unusedParams"
       )
 
-      // println(lastUsagesPre.view.mapValues(_.map(_.name)).toMap)
-      println(fn.name.value)
-      println(lastUsagesPost.view.mapValues(_.map(_.name)).toMap)
-
       // param names don't need to be mangled because they're the first occurrence
       val params = fn.params
         .map(param => s"${typeRefToC(param.typ.name)} ${param.name.value}")
@@ -788,17 +784,6 @@ object Translator {
         .map { varDef =>
           decrRc(mangledVars.getOrElse(varDef, varDef.name), varDef.typ)
         }.mkString("\n", "\n", "")
-
-      if (lastUsagesPre.getOrElse(expr, Set.empty).nonEmpty) {
-        println(
-          s"last usage pre: ${lastUsagesPre(expr).map(_.name)}, expr: $expr"
-        )
-      }
-      if (lastUsagesPost.getOrElse(expr, Set.empty).nonEmpty) {
-        println(
-          s"last usage post: ${lastUsagesPost(expr).map(_.name)}, expr: $expr"
-        )
-      }
 
       (setupDecrs + setup, toC, teardown + teardownDecrs)
     }

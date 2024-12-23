@@ -3,6 +3,7 @@ package fred
 import scala.sys.process.*
 import java.nio.file.Files
 import java.nio.file.Path
+import scala.util.Random
 
 import org.scalatest.funsuite.AnyFunSuite
 import snapshot4s.scalatest.SnapshotAssertions
@@ -221,17 +222,18 @@ object ExecTests {
       case None =>
     }
 
-    Compiler.invokeGCC(generatedC, "a.out", settings)
+    val exeName = Random.alphanumeric.take(10).mkString + ".bin"
+    Compiler.invokeGCC(generatedC, exeName, settings)
 
     val stderrBuf = StringBuilder()
     val stdout =
       try {
-        "valgrind --leak-check=full --show-leak-kinds=all -s ./a.out" !!
+        s"valgrind --leak-check=full --show-leak-kinds=all -s ./$exeName" !!
           ProcessLogger(_ => {}, err => stderrBuf.append('\n').append(err))
       } catch {
         case e: RuntimeException =>
           throw RuntimeException(stderrBuf.toString, e)
-      }
+      } finally { Files.deleteIfExists(Path.of(exeName)) }
     val valgrindOut = stderrBuf.toString
     expected match {
       case Some(expected) => assert(
