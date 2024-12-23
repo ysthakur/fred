@@ -158,8 +158,8 @@ int fn$sum(struct List* list) {
     $decr_List(tail);
     break;
   }
-  int ret$2 = matchres$1;
   $decr_List(list);
+  int ret$2 = matchres$1;
   return ret$2;
 }
 int main() {
@@ -168,8 +168,8 @@ int main() {
   struct List* list = new$Cons(new$Cons(new$Cons(new$Nil(), 4), 2), 1);
   list->rc ++;
   printf("%d\n", fn$sum(list));
-  int ret$3 = 0;
   $decr_List(list);
+  int ret$3 = 0;
   processAllPCRs();
   free(pcrBuckets);
   return ret$3;

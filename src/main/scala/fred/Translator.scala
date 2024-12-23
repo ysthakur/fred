@@ -385,6 +385,11 @@ object Translator {
 
     val mangledVars = mutable.Map.empty[VarDef, String]
 
+    val lastUsagesPost = mutable.Map.empty[Expr, Set[VarDef]]
+    val lastUsagesPre = mutable.Map.empty[Expr, Set[VarDef]]
+
+    val unusedVars = mutable.Set.empty[VarDef]
+
     private var resVarCounter = 0
 
     def translateType(typ: TypeDef): String = {
@@ -437,18 +442,33 @@ object Translator {
 
     /** Returns code for the function's declaration and implementation */
     def fnToC(fn: FnDef)(using bindings: Bindings): (String, String) = {
+      given Bindings = bindings.enterFn(fn)
+      lastUsagesPre.clear()
+      lastUsagesPost.clear()
+      unusedVars.clear()
+
+      val paramDefs = fn.params
+        .map(param => VarDef.Param(param, bindings.getType(param.typ))).toSet
+      val unusedParams = findLastUsages(fn.body, paramDefs).map(_.name)
+      assert(
+        unusedParams.subsetOf(paramDefs.map(_.name)),
+        s"Function: ${fn.name.value}, unused vars: $unusedParams"
+      )
+
+      // println(lastUsagesPre.view.mapValues(_.map(_.name)).toMap)
+      println(fn.name.value)
+      println(lastUsagesPost.view.mapValues(_.map(_.name)).toMap)
+
       // param names don't need to be mangled because they're the first occurrence
       val params = fn.params
         .map(param => s"${typeRefToC(param.typ.name)} ${param.name.value}")
         .mkString(", ")
-      val paramsSetup = fn.params
-        .map(param => incrRc(param.name.value, bindings.getType(param.typ)))
-        .mkString("\n")
-      val paramsTeardown = fn.params
-        .map(param => decrRc(param.name.value, bindings.getType(param.typ)))
-        .mkString("\n")
-      val (bodySetup, body, bodyTeardown) =
-        exprToC(fn.body)(using bindings.enterFn(fn))
+      val paramsSetup = fn.params.map { param =>
+        if (unusedParams(param.name.value)) ""
+        else incrRc(param.name.value, bindings.getType(param.typ))
+      }.mkString("\n")
+
+      val (bodySetup, body, bodyTeardown) = exprToC(fn.body)
       val resVar = newVar("ret")
       val typeToC = typeRefToC(fn.returnType.name)
 
@@ -474,11 +494,97 @@ object Translator {
                      |${indent(1)(bodySetup)}
                      |  $typeToC $resVar = $body;
                      |${indent(1)(bodyTeardown)}
-                     |${indent(1)(paramsTeardown)}
                      |$triggerGC
                      |  return $resVar;
                      |}""".stripMargin
       (decl, impl)
+    }
+
+    /** Go through an expression backwards, finding the last usage of every
+      * variable. These last usages are added to `lastUsagesPre` and
+      * `lastUsagesPost`.
+      *
+      * @param vars
+      *   Variables that so far have been unused ("so far" while moving
+      *   backwards, not forwards)
+      * @return
+      *   The remaining variables that weren't used in this expression
+      */
+    private def findLastUsages(expr: Expr, vars: Set[VarDef])(using
+        bindings: Bindings
+    ): Set[VarDef] = {
+      expr match {
+        case IntLiteral(_, _) | StringLiteral(_, _) => vars
+        case VarRef(name, span) =>
+          val varDef = bindings.vars(name)
+          if (vars.contains(varDef)) {
+            lastUsagesPost(expr) = Set(varDef)
+            vars - varDef
+          } else { vars }
+        case SetFieldExpr(lhsObj, lhsField, value, span) =>
+          val varDef = bindings.vars(lhsObj.value)
+          if (vars.contains(varDef)) {
+            lastUsagesPost(expr) = Set(varDef)
+            findLastUsages(value, vars - varDef)
+          } else { findLastUsages(value, vars) }
+        case FieldAccess(obj, field, typ) => findLastUsages(obj, vars)
+        case BinExpr(lhs, op, rhs, typ) =>
+          val remVars = findLastUsages(rhs, vars)
+          findLastUsages(lhs, remVars)
+        case FnCall(fnName, args, resolvedFn, typ, span) => args
+            .foldRight(vars)(findLastUsages(_, _))
+        case CtorCall(ctorName, values, span) => values
+            .foldRight(vars) { case ((_, expr), vars) =>
+              findLastUsages(expr, vars)
+            }
+        case expr @ LetExpr(name, value, body, span) =>
+          val varType = typer.types(value)
+          val varDef = VarDef.Let(expr, varType)
+          val newBindings = bindings.withVar(name.value, varDef)
+          var bodyRemVars =
+            findLastUsages(body, vars + varDef)(using newBindings)
+          if (bodyRemVars.contains(varDef)) {
+            unusedVars += varDef
+            bodyRemVars -= varDef
+          }
+          findLastUsages(value, bodyRemVars)
+        case IfExpr(cond, thenBody, elseBody, span) =>
+          val thenRemVars = findLastUsages(thenBody, vars)
+          val elseRemVars = findLastUsages(elseBody, vars)
+          lastUsagesPre(thenBody) = thenRemVars -- elseRemVars
+          lastUsagesPre(elseBody) = elseRemVars -- thenRemVars
+          findLastUsages(cond, thenRemVars & elseRemVars)
+        case matchExpr @ MatchExpr(obj, arms, armsSpan) =>
+          val objType = typer.types(obj).asInstanceOf[TypeDef]
+
+          val armVars = arms.map {
+            case arm @ MatchArm(
+                  pat @ MatchPattern(ctorName, patBindings),
+                  body,
+                  _
+                ) =>
+              val newBindings = bindings.enterPattern(matchExpr, pat, objType)
+              val newVars = patBindings.map { case (_, varName) =>
+                newBindings.vars(varName.value)
+              }.toSet
+              val remVars =
+                findLastUsages(body, vars | newVars)(using newBindings)
+
+              unusedVars ++= newVars -- remVars
+
+              arm -> remVars
+          }.toMap
+
+          for (arm <- arms) {
+            val remVars = armVars(arm)
+            val otherArms = arms.filter(_ != arm)
+            val otherVars = otherArms.map(armVars).reduce(_ | _)
+            lastUsagesPre(arm.body) = remVars -- otherVars
+          }
+
+          val commonUnused = armVars.values.reduce(_ | _)
+          findLastUsages(obj, commonUnused)
+      }
     }
 
     /** @return
@@ -491,7 +597,7 @@ object Translator {
     private def exprToC(
         expr: Expr
     )(using bindings: Bindings): (String, String, String) = {
-      expr match {
+      val (setup, toC, teardown) = expr match {
         case IntLiteral(value, _) => ("", value.toString, "")
         case StringLiteral(value, _) =>
           ("", s"\"${value.replace("\"", "\\\"")}\"", "")
@@ -543,8 +649,8 @@ object Translator {
           val (valueSetup, valueToC, valueTeardown) = exprToC(value)
           val typ = typer.types(value)
           val shouldMangle = bindings.vars.contains(name.value)
-          val newBindings = bindings
-            .withVar(name.value, VarDef.Let(letExpr, typ))
+          val varDef = VarDef.Let(letExpr, typ)
+          val newBindings = bindings.withVar(name.value, varDef)
           val mangledName =
             if (shouldMangle) newMangledVar(name.value) else name.value
           if (shouldMangle) {
@@ -554,8 +660,10 @@ object Translator {
           val (bodySetup, bodyToC, bodyTeardown) =
             exprToC(body)(using newBindings)
 
+          val decr =
+            if (unusedVars.contains(varDef)) decrRc(mangledName, typ) else ""
           (
-            s"$valueSetup\n$letSetup\n$valueTeardown\n$bodySetup",
+            s"$valueSetup\n$letSetup\n$valueTeardown\n$decr\n$bodySetup",
             bodyToC,
             s"$bodyTeardown\n$letTeardown"
           )
@@ -615,6 +723,7 @@ object Translator {
 
           val armsToC = arms.map {
             case MatchArm(pat @ MatchPattern(ctorName, patBindings), body, _) =>
+              // TODO decrement unused variables immediately
               val variant = objType.cases.find(_.name.value == ctorName.value)
                 .get
               val oldBindings = bindings
@@ -665,6 +774,27 @@ object Translator {
 
           (setup, resVar, teardown)
       }
+
+      val setupDecrs = lastUsagesPre.getOrElse(expr, Set.empty).map { varDef =>
+        decrRc(mangledVars.getOrElse(varDef, varDef.name), varDef.typ)
+      }.mkString("", "\n", "\n")
+      val teardownDecrs = lastUsagesPost.getOrElse(expr, Set.empty)
+        .map { varDef =>
+          decrRc(mangledVars.getOrElse(varDef, varDef.name), varDef.typ)
+        }.mkString("\n", "\n", "")
+
+      if (lastUsagesPre.getOrElse(expr, Set.empty).nonEmpty) {
+        println(
+          s"last usage pre: ${lastUsagesPre(expr).map(_.name)}, expr: $expr"
+        )
+      }
+      if (lastUsagesPost.getOrElse(expr, Set.empty).nonEmpty) {
+        println(
+          s"last usage post: ${lastUsagesPost(expr).map(_.name)}, expr: $expr"
+        )
+      }
+
+      (setupDecrs + setup, toC, teardown + teardownDecrs)
     }
 
     private def newMangledVar(baseName: String): String = {
@@ -678,8 +808,7 @@ object Translator {
     ): (String, String) = {
       val setup = s"""|${typeRefToC(typ.name)} ${varName} = $value;
                       |${incrRc(varName, typ)}""".stripMargin
-      val teardown = decrRc(varName, typ)
-      (setup, teardown)
+      (setup, "")
     }
 
     /** Create a variable name that hopefully won't conflict with any other

@@ -278,9 +278,9 @@ int main() {
   a->next->rc ++;
   $decr_Option(oldValue$0);
   printf("%d\n", a->value + b->value);
-  int ret$1 = 0;
-  $decr_List(b);
   $decr_List(a);
+  $decr_List(b);
+  int ret$1 = 0;
   processAllPCRs();
   free(pcrBuckets);
   return ret$1;

@@ -384,12 +384,12 @@ int main() {
   bar->rc ++;
   struct Foo* foo = new$Foo(bar);
   foo->rc ++;
+  $decr_Bar(bar);
   struct FooList* foos = new$FooCons(foo, new$FooNil());
   foos->rc ++;
-  int ret$0 = 0;
-  $decr_FooList(foos);
   $decr_Foo(foo);
-  $decr_Bar(bar);
+  $decr_FooList(foos);
+  int ret$0 = 0;
   processAllPCRs();
   free(pcrBuckets);
   return ret$0;

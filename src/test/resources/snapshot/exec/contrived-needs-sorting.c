@@ -794,6 +794,7 @@ int main() {
   actualCtx->files = new$FileCons(ctx->ref, file, ctx->ref->files);
   actualCtx->files->rc ++;
   $decr_FileList(oldValue$0);
+  $decr_Context(actualCtx);
   struct Expr* expr = new$Expr(file);
   expr->rc ++;
   struct ExprList* oldValue$1 = file->exprs;
@@ -802,15 +803,14 @@ int main() {
   $decr_ExprList(oldValue$1);
   drop((void *) file->exprs, (void *) $decr_ExprList);
   $decr_Expr(expr);
+  $decr_File(file);
   struct Context* oldValue$2 = ctx->ref;
   ctx->ref = new$Context(new$FileNil(), "other context");
   ctx->ref->rc ++;
   $decr_Context(oldValue$2);
   drop((void *) ctx->ref, (void *) $decr_Context);
-  int ret$3 = 0;
-  $decr_Context(actualCtx);
-  $decr_File(file);
   $decr_CtxRef(ctx);
+  int ret$3 = 0;
   processAllPCRs();
   free(pcrBuckets);
   return ret$3;

@@ -26,6 +26,7 @@ case class MatchArm(pat: MatchPattern, body: Expr, span: Span)
   */
 case class MatchPattern(
     ctorName: Spanned[String],
+    /** (fieldName, varName) tuples */
     bindings: List[(Spanned[String], Spanned[String])]
 )
 

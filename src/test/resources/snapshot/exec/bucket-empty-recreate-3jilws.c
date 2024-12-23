@@ -284,9 +284,9 @@ int main() {
   v0->self->rc ++;
   $decr_OptFoo(oldValue$2);
   drop((void *) v0->self, (void *) $decr_OptFoo);
-  int ret$3 = 0;
   $decr_Foo(v1);
   $decr_Foo(v0);
+  int ret$3 = 0;
   processAllPCRs();
   free(pcrBuckets);
   return ret$3;
