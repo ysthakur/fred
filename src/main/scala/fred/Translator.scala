@@ -570,19 +570,21 @@ object Translator {
               val remVars =
                 findLastUsages(body, vars | newVars)(using newBindings)
 
-              unusedVars ++= newVars -- remVars
+              unusedVars ++= newVars & remVars
 
-              arm -> remVars
+              arm -> (remVars -- newVars)
           }.toMap
 
-          for (arm <- arms) {
-            val remVars = armVars(arm)
-            val otherArms = arms.filter(_ != arm)
-            val otherVars = otherArms.map(armVars).reduce(_ | _)
-            lastUsagesPre(arm.body) = remVars -- otherVars
+          if (arms.size > 1) {
+            for (arm <- arms) {
+              val remVars = armVars(arm)
+              val otherArms = arms.filter(_ != arm)
+              val otherVars = otherArms.map(armVars).fold(Set.empty)(_ | _)
+              lastUsagesPre(arm.body) = remVars -- otherVars
+            }
           }
 
-          val commonUnused = armVars.values.reduce(_ | _)
+          val commonUnused = armVars.values.reduce(_ & _)
           findLastUsages(obj, commonUnused)
       }
     }
@@ -742,14 +744,18 @@ object Translator {
                     mangledVars
                       .put(newBindings.vars(varName.value), mangledVarName)
                   }
-                  addBinding(
+                  val fieldType = newBindings.types(
+                    variant.fields.find(_.name.value == fieldName.value).get.typ
+                      .name
+                  )
+                  val (setup, teardown) = addBinding(
                     mangledVarName,
                     s"$objVar->$fieldNameMangled",
-                    newBindings.types(
-                      variant.fields.find(_.name.value == fieldName.value).get
-                        .typ.name
-                    )
+                    fieldType
                   )
+                  if (unusedVars.contains(newBindings.vars(varName.value))) {
+                    (s"$setup\n${decrRc(mangledVarName, fieldType)}", teardown)
+                  } else { (setup, teardown) }
                 }.unzip
               val (bodySetup, bodyToC, bodyTeardown) =
                 exprToC(body)(using newBindings)

@@ -158,8 +158,8 @@ int fn$foo(struct Foo* foo) {
     matchres$1 = b;
     break;
   }
-  int ret$2 = matchres$1;
   $decr_Foo(foo);
+  int ret$2 = matchres$1;
   return ret$2;
 }
 int main() {

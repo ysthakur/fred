@@ -36,6 +36,25 @@ class ExecTests extends AnyFunSuite, SnapshotAssertions {
     valgrindCheck(code, "immediate-drop.c")("")
   }
 
+  test("Unused variables") {
+    val code = """
+    data List = Cons { next: List } | Nil {}
+
+    fn f(list: List): int =
+      list match {
+        Cons { next: list } =>
+          let list = Nil {} in
+          0,
+        Nil {} => 2
+      }
+
+    fn main(): int =
+      f(Cons { next: Nil {} });
+      0
+    """
+    valgrindCheck(code, "unused-3jpowi.c")("")
+  }
+
   test("Basic main function") {
     val code = """
       data List
