@@ -4,7 +4,7 @@ Fred is a programming language made to explore a compiler optimization for lazy 
 
 With the lazy mark scan algorithm, whenever an object's reference count is decremented but it doesn't hit 0, it's added to a list of potential cyclic roots (PCRs). Every once in a while, you go through these PCRs (as a group) and perform trial deletion to get rid of cycles. But you need to scan every single object reachable from all of these PCRs. So, I worked on a way to reduce this scanning using type information.
 
-To do this, you can first partition the graph of types into its [strongly-connected components](https://en.wikipedia.org/wiki/Strongly_connected_component) (SCCs). If you have two objects object `a` and `b` of types `A` and `B` respectively, and `A` and `B` are not from the same SCC, you know that `a` and `b` cannot possibly form a cycle. This is important.
+To do this, you can first partition the graph of types into its [strongly-connected components](https://en.wikipedia.org/wiki/Strongly_connected_component) (SCCs). If you have two objects object `a` and `b` of types `A` and `B` respectively, and `A` and `B` are not from the same SCC, you know that `a` and `b` cannot possibly form a cycle. This is useful information.
 
 Now that you have these SCCs, you don't need to maintain a flat list of PCRs. Instead, you can maintain a list of PCR buckets, with each bucket containing PCRs from a different SCC (bucket 0 contains all the PCRs from SCC 0, bucket 1 contains all the PCRs from SCC 1, ...). When processing the PCRs, you process one bucket at a time, rather than the entire list of PCRs. This makes the algorithm more incremental. That's not the main improvement, though.
 
